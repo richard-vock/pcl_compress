@@ -63,7 +63,7 @@ image_t jbig2_decompress_chunk(chunk_const_ptr_t chunk) {
     params.output_file = NULL;
     params.output_format = jbig2dec_format_none;
     Jbig2Ctx* ctx = jbig2_ctx_new(NULL, (Jbig2Options)0, NULL, NULL, &params);
-	jbig2_data_in(ctx, chunk->data, chunk->length);
+	jbig2_data_in(ctx, chunk->data(), chunk->size());
 
     Jbig2Image* rec = jbig2_page_out(ctx);
     image_t img(rec->height, rec->width, CV_8UC1);
@@ -109,7 +109,7 @@ image_t jpeg2000_decompress_chunk(chunk_const_ptr_t chunk) {
 
     std::stringstream data_stream;
     opj_stream_set_user_data(stream, (void*)&data_stream, [](void*){});
-    opj_stream_set_user_data_length(stream, (OPJ_UINT64)chunk->length);
+    opj_stream_set_user_data_length(stream, (OPJ_UINT64)chunk->size());
     opj_stream_set_read_function(stream, [](void* buf, OPJ_SIZE_T len, void* data) {
         std::stringstream* str = (std::stringstream*)data;
         str->read((char*)buf, len);
@@ -125,7 +125,7 @@ image_t jpeg2000_decompress_chunk(chunk_const_ptr_t chunk) {
         str->seekg(offset, std::ios_base::cur);
         return (long int)OPJ_TRUE;
     });
-    data_stream.write((const char*)chunk->data, chunk->length);
+    data_stream.write((const char*)chunk->data(), chunk->size());
     data_stream.seekg(0);
 
     codec = opj_create_decompress(OPJ_CODEC_J2K);
@@ -231,15 +231,8 @@ std::vector<patch_t> decompress_patches(compressed_cloud_t::const_ptr_t cloud) {
             rescale<uint8_t>(cloud->bases[idx*9+8], -1.f, 1.f)
         ;
 
-        chunk_ptr_t chunk_jbig2(new chunk_t()), chunk_jpeg2k(new chunk_t());
-        chunk_jbig2->length = cloud->patch_image_data[idx*2 + 0].size();
-        chunk_jpeg2k->length = cloud->patch_image_data[idx*2 + 1].size();
-        chunk_jbig2->data = (uint8_t*)malloc(chunk_jbig2->length * sizeof(uint8_t));
-        chunk_jpeg2k->data = (uint8_t*)malloc(chunk_jpeg2k->length * sizeof(uint8_t));
-        const char* jbig2_data = reinterpret_cast<const char*>(cloud->patch_image_data[idx*2 + 0].data());
-        const char* jpeg2k_data = reinterpret_cast<const char*>(cloud->patch_image_data[idx*2 + 1].data());
-        memcpy((char*)chunk_jbig2->data, jbig2_data, chunk_jbig2->length * sizeof(uint8_t));
-        memcpy((char*)chunk_jpeg2k->data, jpeg2k_data, chunk_jpeg2k->length * sizeof(uint8_t));
+        chunk_ptr_t chunk_jbig2(new chunk_t(cloud->patch_image_data[idx*2 + 0]));
+        chunk_ptr_t chunk_jpeg2k(new chunk_t(cloud->patch_image_data[idx*2 + 0]));
 
         patch.occ_map = jbig2_decompress_chunk(chunk_jbig2);
         patch.height_map = jpeg2000_decompress_chunk(chunk_jpeg2k);

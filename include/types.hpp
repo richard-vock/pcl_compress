@@ -17,27 +17,11 @@ namespace pcl_compress {
 
 typedef cv::Mat image_t;
 
-typedef struct chunk_ {
-    uint8_t* data;
-    int length;
-
-    ~chunk_() {
-        free(data);
-    }
-} chunk_t;
+typedef std::vector<uint8_t> chunk_t;
 
 typedef std::shared_ptr<chunk_t> chunk_ptr_t;
 typedef std::shared_ptr<const chunk_t> chunk_const_ptr_t;
 typedef std::vector<chunk_ptr_t> chunks_t;
-
-typedef struct stream_data_ {
-    chunk_ptr_t  global;
-    chunks_t     chunks;
-
-    stream_data_() {
-        global = std::make_shared<chunk_t>();
-    }
-} stream_data_t;
 
 typedef pcl::PointXYZ                   point_xyz_t;
 typedef pcl::PointNormal                point_normal_t;
@@ -57,7 +41,6 @@ typedef struct patch_ {
     bbox3f_t local_bbox;
     image_t  height_map;
     image_t  occ_map;
-    //std::vector<vec3f_t> test;
 } patch_t;
 
 typedef struct compressed_cloud_ {
@@ -72,7 +55,6 @@ typedef struct compressed_cloud_ {
     std::vector<uint16_t> origins;
     std::vector<uint16_t> bboxes;
     std::vector<uint8_t>  bases;
-    //chunk_ptr_t global_occ_data;
 
     // per-patch data
     std::vector<std::vector<uint8_t>> patch_image_data;

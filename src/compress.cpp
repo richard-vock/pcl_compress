@@ -49,9 +49,12 @@ chunks_t jbig2_compress_images(const std::vector<image_t>& images) {
 
     chunks_t chunks;
     for (auto& page : pages) {
-        chunk_ptr_t chunk(new chunk_t());
-        chunk->data = jbig2_encode_generic(page, true, 0, 0, false, &(chunk->length));
+        int length;
+        uint8_t* data;
+        data = jbig2_encode_generic(page, true, 0, 0, false, &length);
+        chunk_ptr_t chunk(new chunk_t(data, data + length));
         pixDestroy(&page);
+        free(data);
         chunks.push_back(chunk);
     }
 
@@ -165,14 +168,14 @@ chunks_t jpeg2000_compress_images(const std::vector<image_t>& images, int qualit
         }
 
         // work on data...
-        chunk_ptr_t chunk(new chunk_t());
         data_stream.seekg(0, data_stream.end);
-        chunk->length = data_stream.tellg();
+        int length = data_stream.tellg();
         data_stream.seekg(0, data_stream.beg);
-        assert(chunk->length > 0);
-        chunk->data = (uint8_t*)malloc(chunk->length);
-        //chunk->data = new uint8_t[chunk->length];
-        data_stream.read((char*)chunk->data, chunk->length);
+        assert(length > 0);
+        uint8_t* data = new uint8_t[length];
+        data_stream.read((char*)data, length);
+
+        chunk_ptr_t chunk(new chunk_t(data, data + length));
 
         opj_stream_destroy(stream);
         opj_destroy_codec(codec);
@@ -334,10 +337,8 @@ compressed_cloud_t::ptr_t compress_patches(const std::vector<patch_t>& patches, 
     assert(jbig2_chunks.size() == jpeg2k_chunks.size());
 
     for (uint32_t i = 0; i < jpeg2k_chunks.size(); ++i) {
-        std::vector<uint8_t> chunk_jbig2(jbig2_chunks[i]->data, jbig2_chunks[i]->data + jbig2_chunks[i]->length);
-        std::vector<uint8_t> chunk_jpeg2k(jpeg2k_chunks[i]->data, jpeg2k_chunks[i]->data + jpeg2k_chunks[i]->length);
-        cloud->patch_image_data.push_back(chunk_jbig2);
-        cloud->patch_image_data.push_back(chunk_jpeg2k);
+        cloud->patch_image_data.push_back(*jbig2_chunks[i]);
+        cloud->patch_image_data.push_back(*jpeg2k_chunks[i]);
     }
 
     return cloud;

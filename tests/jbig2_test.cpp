@@ -97,7 +97,7 @@ int main (int argc, char const* argv[]) {
 
     uint64_t num_bytes = 0;
     for (const auto& chunk : stream_data) {
-        num_bytes += static_cast<uint64_t>(chunk->length);
+        num_bytes += static_cast<uint64_t>(chunk->size());
     }
     std::cout << "num bytes in compressed form: " << (num_bytes / 1024) << "kB.\n";
 

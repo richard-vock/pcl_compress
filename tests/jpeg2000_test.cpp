@@ -84,7 +84,7 @@ int main (int argc, char const* argv[]) {
         chunk_ptr_t chunk = stream_data[idx];
         std::string outfile = "/tmp/out/"+std::to_string(idx++)+".j2k";
         std::ofstream out(outfile.c_str());
-        out.write((const char*)chunk->data, chunk->length);
+        out.write((const char*)chunk->data(), chunk->size());
         out.close();
 
         //std::ifstream in(outfile.c_str());
