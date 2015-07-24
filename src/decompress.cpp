@@ -39,28 +39,32 @@ struct stream_context {
     }
 };
 
-std::shared_ptr<stream_context> init_stream_decompress(std::shared_ptr<const chunk_t> global_chunk) {
-    std::shared_ptr<stream_context> context(new stream_context);
+//std::shared_ptr<stream_context> init_stream_decompress(std::shared_ptr<const chunk_t> global_chunk) {
+    //std::shared_ptr<stream_context> context(new stream_context);
 
-    context->params.mode = render;
-    context->params.verbose = 3;
-    context->params.hash = 0;
-    context->params.output_file = NULL;
-    context->params.output_format = jbig2dec_format_none;
-    Jbig2Ctx* ctx = jbig2_ctx_new(NULL, JBIG2_OPTIONS_EMBEDDED, NULL, NULL, &context->params);
-    jbig2_data_in(ctx, global_chunk->data, global_chunk->length);
+    //context->params.mode = render;
+    //context->params.verbose = 3;
+    //context->params.hash = 0;
+    //context->params.output_file = NULL;
+    //context->params.output_format = jbig2dec_format_none;
+    //Jbig2Ctx* ctx = jbig2_ctx_new(NULL, JBIG2_OPTIONS_EMBEDDED, NULL, NULL, &context->params);
+    //jbig2_data_in(ctx, global_chunk->data, global_chunk->length);
 
-    context->ctx = jbig2_make_global_ctx(ctx);
+    //context->ctx = jbig2_make_global_ctx(ctx);
 
-    return context;
-}
+    //return context;
+//}
 
-image_t jbig2_decompress_chunk(std::shared_ptr<stream_context> context, chunk_const_ptr_t chunk) {
-    Jbig2Ctx* ctx = jbig2_ctx_new(NULL, JBIG2_OPTIONS_EMBEDDED, context->ctx, NULL, &context->params);
-
+image_t jbig2_decompress_chunk(chunk_const_ptr_t chunk) {
+    jbig2dec_params_t params;
+    params.mode = render;
+    params.verbose = 3;
+    params.hash = 0;
+    params.output_file = NULL;
+    params.output_format = jbig2dec_format_none;
+    Jbig2Ctx* ctx = jbig2_ctx_new(NULL, (Jbig2Options)0, NULL, NULL, &params);
 	jbig2_data_in(ctx, chunk->data, chunk->length);
 
-    jbig2_complete_page(ctx);
     Jbig2Image* rec = jbig2_page_out(ctx);
     image_t img(rec->height, rec->width, CV_8UC1);
     for (int row = 0; row < rec->height; ++row) {
@@ -197,7 +201,7 @@ std::vector<patch_t> decompress_patches(compressed_cloud_t::const_ptr_t cloud) {
     vec3f_t bbmax_o = cloud->bbox_origins.max();
     vec3f_t bbmin_b = cloud->bbox_bboxes.min();
     vec3f_t bbmax_b = cloud->bbox_bboxes.max();
-    std::shared_ptr<stream_context> ctx = init_stream_decompress(cloud->global_occ_data);
+    //std::shared_ptr<stream_context> ctx = init_stream_decompress(cloud->global_occ_data);
     uint32_t idx = 0;
     for (auto& patch : patches) {
         patch.origin = vec3f_t(
@@ -227,7 +231,7 @@ std::vector<patch_t> decompress_patches(compressed_cloud_t::const_ptr_t cloud) {
             rescale<uint8_t>(cloud->bases[idx*9+8], -1.f, 1.f)
         ;
 
-        patch.occ_map = jbig2_decompress_chunk(ctx, cloud->patch_image_data[idx*2 + 0]);
+        patch.occ_map = jbig2_decompress_chunk(cloud->patch_image_data[idx*2 + 0]);
         patch.height_map = jpeg2000_decompress_chunk(cloud->patch_image_data[idx*2 + 1]);
         std::string img_fn = "/tmp/patch_"+std::to_string(idx)+".png";
         cv::imwrite(img_fn, patch.occ_map);

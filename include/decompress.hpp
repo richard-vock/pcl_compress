@@ -7,9 +7,9 @@ namespace pcl_compress {
 
 struct stream_context;
 
-std::shared_ptr<stream_context> init_stream_decompress(std::shared_ptr<const chunk_t> global_chunk);
+//std::shared_ptr<stream_context> init_stream_decompress(std::shared_ptr<const chunk_t> global_chunk);
 
-image_t jbig2_decompress_chunk(std::shared_ptr<stream_context> context, chunk_const_ptr_t chunk);
+image_t jbig2_decompress_chunk(chunk_const_ptr_t chunk);
 
 image_t jpeg2000_decompress_chunk(chunk_const_ptr_t chunk);
 

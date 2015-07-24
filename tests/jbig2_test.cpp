@@ -87,22 +87,23 @@ int main (int argc, char const* argv[]) {
         }
     }
 
-    stream_data_t stream_data = jbig2_compress_stream(images);
+    chunks_t stream_data = jbig2_compress_images(images);
 
-    if (stream_data.chunks.size() != input_files.size()) {
+    if (stream_data.size() != input_files.size()) {
         std::cerr << "Not all images compressed" << "\n";
         return 1;
     }
     std::cout << "done compressing." << "\n";
 
-    uint64_t num_bytes = static_cast<uint64_t>(stream_data.global->length);
-    for (const auto& chunk : stream_data.chunks) {
+    uint64_t num_bytes = 0;
+    for (const auto& chunk : stream_data) {
         num_bytes += static_cast<uint64_t>(chunk->length);
     }
     std::cout << "num bytes in compressed form: " << (num_bytes / 1024) << "kB.\n";
 
 
-    std::shared_ptr<stream_context> context = init_stream_decompress(stream_data.global);
+    //std::shared_ptr<stream_context> context = init_stream_decompress(stream_data.global);
+    std::vector<image_t> reconstructed;
     for (uint32_t i = 0; i < input_files.size(); ++i) {
         std::string out_path;
         if (!vm.count("prefix")) {
@@ -111,10 +112,10 @@ int main (int argc, char const* argv[]) {
         } else {
             out_path = (path_out / prefix_out).string() + std::to_string(i-1) + ".jpg";
         }
-        image_t rec = jbig2_decompress_chunk(context, stream_data.chunks[i]);
-        image_t orig = images[i];
-        //std::cout << "rmse for idx " << i << ": " << compute_rmse(orig, rec) << "\n";
+        image_t rec = jbig2_decompress_chunk(stream_data[i]);
+        reconstructed.push_back(rec);
         cv::imwrite(out_path, rec);
     }
+    std::cout << "rmse: " << compute_rmse(images, reconstructed) << "\n";
 }
 

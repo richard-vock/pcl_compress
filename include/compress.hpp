@@ -6,7 +6,7 @@
 namespace pcl_compress {
 
 
-stream_data_t jbig2_compress_stream(const std::vector<image_t>& images);
+chunks_t jbig2_compress_images(const std::vector<image_t>& images);
 
 chunks_t jpeg2000_compress_images(const std::vector<image_t>& images, int quality);
 

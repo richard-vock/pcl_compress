@@ -13,8 +13,6 @@ namespace po = boost::program_options;
 #include <compress.hpp>
 #include <decompress.hpp>
 
-#include <metrics.hpp>
-
 #include <pcl/io/pcd_io.h>
 #include <pcl/octree/octree.h>
 
@@ -24,12 +22,19 @@ using namespace pcl_compress;
 int main (int argc, char const* argv[]) {
 	std::string  file_in;
 	std::string  file_out;
+    float        px_factor;
+    float        px_epsilon;
+    vec2i_t      min_img_size;
 
 	po::options_description desc("jpeg2000_test command line options");
 	desc.add_options()
 		("help,h",  "Help message")
 		("input-file,i",     po::value<std::string>(&file_in)->required(), "Input file")
 		("output-file,o",    po::value<std::string>(&file_out)->required(), "Output file")
+		("pixel-factor,f",   po::value<float>(&px_factor)->default_value(10.f), "Pixel size factor")
+		("pixel-epsilon,e",   po::value<float>(&px_epsilon)->default_value(1E-4), "Patch resolution epsilon")
+		("min-img-x,x",   po::value<int>(&min_img_size[0])->default_value(20), "Minimum image width")
+		("min-img-y,y",   po::value<int>(&min_img_size[1])->default_value(20), "Minimum image height")
 	;
 
 	// Check for required options.
@@ -60,7 +65,6 @@ int main (int argc, char const* argv[]) {
 
     cloud_xyz_t::Ptr cloud_in(new cloud_xyz_t());
     pcl::io::loadPCDFile(path_in.string(), *cloud_in);
-    std::cout << cloud_in->size() << "\n";
 
     bbox3f_t bbox;
     for (const auto& p : cloud_in->points) {
@@ -75,16 +79,9 @@ int main (int argc, char const* argv[]) {
         std::vector<int> subset;
         it.getLeafContainer().getPointIndices(subset);
         if (subset.size() < 5) continue;
-        patch_t patch = compute_patch(cloud_in, subset, 100.f, 1E-3);
+        patch_t patch = compute_patch(cloud_in, subset, px_factor, px_epsilon, min_img_size);
         patches.push_back(patch);
     }
-
-    uint32_t idx = 0;
-    for (const auto& patch : patches) {
-        std::string img_fn = "/tmp/original_"+std::to_string(idx++)+".png";
-        cv::imwrite(img_fn, patch.occ_map);
-    }
-
 
     std::cout << "compressing" << "\n";
     compressed_cloud_t::ptr_t cc = compress_patches(patches, 35);
@@ -99,10 +96,39 @@ int main (int argc, char const* argv[]) {
     double bpp = static_cast<double>(bytes_out) / (static_cast<double>(cc->num_points) / 8.0);
     std::cout << "compression factor: " << c_factor << "\n";
     std::cout << "bpp: " << bpp << "\n";
-    std::cout << "decompressing" << "\n";
-    std::vector<patch_t> dec_patches = decompress_patches(cc);
-    std::cout << "done" << "\n";
 
-    cloud_xyz_t::Ptr cloud_out = from_patches(dec_patches);
-    pcl::io::savePCDFileBinary(path_out.string(), *cloud_out);
+    std::ofstream out(file_out.c_str());
+    if (!out.good()) {
+        std::cerr << "Unable to open file \"" << file_out << "\" for writing." << "\n";
+        return 1;
+    }
+    out.write((const char*)&cc->num_patches, 4);
+    out.write((const char*)&cc->num_points, 4);
+    out.write((const char*)&cc->bbox_origins.min()[0], 4);
+    out.write((const char*)&cc->bbox_origins.min()[1], 4);
+    out.write((const char*)&cc->bbox_origins.min()[2], 4);
+    out.write((const char*)&cc->bbox_origins.max()[0], 4);
+    out.write((const char*)&cc->bbox_origins.max()[1], 4);
+    out.write((const char*)&cc->bbox_origins.max()[2], 4);
+    out.write((const char*)&cc->bbox_bboxes.min()[0], 4);
+    out.write((const char*)&cc->bbox_bboxes.min()[1], 4);
+    out.write((const char*)&cc->bbox_bboxes.min()[2], 4);
+    out.write((const char*)&cc->bbox_bboxes.max()[0], 4);
+    out.write((const char*)&cc->bbox_bboxes.max()[1], 4);
+    out.write((const char*)&cc->bbox_bboxes.max()[2], 4);
+
+    const char* data = reinterpret_cast<const char*>(cc->origins.data());
+    out.write(data, cc->origins.size()*sizeof(uint16_t));
+
+    data = reinterpret_cast<const char*>(cc->bboxes.data());
+    out.write(data, cc->bboxes.size()*sizeof(uint16_t));
+
+    data = reinterpret_cast<const char*>(cc->bases.data());
+    out.write(data, cc->bases.size()*sizeof(uint8_t));
+
+    for (const auto& chunk : cc->patch_image_data) {
+        out.write((const char*)&chunk->length, sizeof(int));
+        out.write((const char*)&chunk->data, sizeof(uint8_t)*chunk->length);
+    }
+    out.close();
 }

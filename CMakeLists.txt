@@ -46,21 +46,27 @@ if (OPENCV_CORE_FOUND AND OPENCV_HIGHGUI_FOUND AND LEPTONICA_FOUND AND JBIG2ENC_
 	add_library(pcl_compress SHARED ${obj})
 	target_link_libraries(pcl_compress ${OpenCV_LIBS} ${LEPTONICA_LIBRARIES} ${JBIG2ENC_LIBRARIES} ${JBIG2DEC_LIBRARIES} ${OPENJPEG_LIBRARIES} ${PCL_LIBRARIES} "dl")
 
-    if (Boost_FOUND)
-        include_directories(${PROJECT_SOURCE_DIR}/tests/include)
+    include_directories(${Boost_INCLUDE_DIRS})
 
-        include_directories(${Boost_INCLUDE_DIRS})
+    ## apps
+    # compress_octree
+    add_executable(compress_octree "apps/compress_octree.cpp")
+    target_link_libraries(compress_octree ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES})
+    # compress_octree
+    add_executable(decompress_octree "apps/decompress_octree.cpp")
+    target_link_libraries(decompress_octree ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES})
 
-        # jbig2 test
-        add_executable(jbig2_test "tests/jbig2_test.cpp")
-        target_link_libraries(jbig2_test ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES})
-        # jpeg2000 test
-        add_executable(jpeg2000_test "tests/jpeg2000_test.cpp")
-        target_link_libraries(jpeg2000_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
-        # patch test
-        add_executable(patch_test "tests/patch_test.cpp")
-        target_link_libraries(patch_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
-    endif()
+    ## tests
+    include_directories(${PROJECT_SOURCE_DIR}/tests/include)
+    # jbig2 test
+    add_executable(jbig2_test "tests/jbig2_test.cpp")
+    target_link_libraries(jbig2_test ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES})
+    # jpeg2000 test
+    add_executable(jpeg2000_test "tests/jpeg2000_test.cpp")
+    target_link_libraries(jpeg2000_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
+    # patch test
+    add_executable(patch_test "tests/patch_test.cpp")
+    target_link_libraries(patch_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
 
 	# install binary
     if (WIN32)
@@ -70,6 +76,8 @@ if (OPENCV_CORE_FOUND AND OPENCV_HIGHGUI_FOUND AND LEPTONICA_FOUND AND JBIG2ENC_
     else()
         install (TARGETS pcl_compress DESTINATION lib)
     endif()
+    install (TARGETS compress_octree DESTINATION bin)
+    install (TARGETS decompress_octree DESTINATION bin)
 	# install header
 	install (DIRECTORY include/ DESTINATION include/pcl_compress)
 endif()

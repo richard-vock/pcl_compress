@@ -42,31 +42,22 @@ std::vector<PIX*> convert_to_pages(const std::vector<image_t>& images) {
     return pages;
 }
 
-stream_data_t jbig2_compress_stream(const std::vector<image_t>& images) {
+chunks_t jbig2_compress_images(const std::vector<image_t>& images) {
     std::vector<PIX*> pages = convert_to_pages(images);
 
-    jbig2ctx* ctx = jbig2_init(0.85f, 0.5f, 0, 0, false, -1);
+    jbig2ctx* ctx = jbig2_init(0.85f, 0.5f, 0, 0, true, -1);
 
+    chunks_t chunks;
     for (auto& page : pages) {
-        jbig2_add_page(ctx, page);
-        pixDestroy(&page);
-    }
-
-    stream_data_t stream_data;
-
-    // produce header
-    stream_data.global->data = jbig2_pages_complete(ctx, &stream_data.global->length);
-
-    // produce pages
-    for (uint32_t i = 0; i < pages.size(); ++i) {
         chunk_ptr_t chunk(new chunk_t());
-        chunk->data = jbig2_produce_page(ctx, i, -1, -1, &chunk->length);
-        stream_data.chunks.push_back(chunk);
+        chunk->data = jbig2_encode_generic(page, true, 0, 0, false, &(chunk->length));
+        pixDestroy(&page);
+        chunks.push_back(chunk);
     }
 
     jbig2_destroy(ctx);
 
-    return stream_data;
+    return chunks;
 }
 
 opj_image_t* convert_for_jpeg2000(const image_t& img) {
@@ -104,28 +95,6 @@ opj_image_t* convert_for_jpeg2000(const image_t& img) {
     return image;
 }
 
-/**
-sample error debug callback expecting no client object
-*/
-static void error_callback(const char *msg, void *client_data) {
-    (void)client_data;
-    fprintf(stdout, "[ERROR] %s", msg);
-}
-/**
-sample warning debug callback expecting no client object
-*/
-static void warning_callback(const char *msg, void *client_data) {
-    (void)client_data;
-    fprintf(stdout, "[WARNING] %s", msg);
-}
-/**
-sample debug callback expecting no client object
-*/
-static void info_callback(const char *msg, void *client_data) {
-    (void)client_data;
-    fprintf(stdout, "[INFO] %s", msg);
-}
-
 chunks_t jpeg2000_compress_images(const std::vector<image_t>& images, int quality) {
     opj_cparameters_t parameters;
     opj_set_default_encoder_parameters(&parameters);
@@ -145,9 +114,9 @@ chunks_t jpeg2000_compress_images(const std::vector<image_t>& images, int qualit
 
         codec = opj_create_compress(OPJ_CODEC_J2K);
 
-        opj_set_info_handler(codec, info_callback,00);
-        opj_set_warning_handler(codec, warning_callback,00);
-        opj_set_error_handler(codec, error_callback,00);
+        //opj_set_info_handler(codec, info_callback,00);
+        //opj_set_warning_handler(codec, warning_callback,00);
+        //opj_set_error_handler(codec, error_callback,00);
 
         if (! opj_setup_encoder(codec, &parameters, image)) {
             opj_destroy_codec(codec);
@@ -277,6 +246,7 @@ patch_t compute_patch(cloud_xyz_t::ConstPtr cloud, const std::vector<int>& subse
     // factor == f  ==>  maximum of f^2 points per pixel on average
     vec2i_t img_size = vec2f_t::Ones().cwiseQuotient(res * px_factor).unaryExpr([] (float x) { return std::ceil(x); }).template cast<int>();
     img_size = img_size.cwiseMax(min_img_size);
+    //std::cout << img_size.transpose() << "\n";
     patch.height_map = image_t(img_size[1], img_size[0], CV_8UC1, cv::Scalar(0));
     patch.occ_map = image_t(img_size[1], img_size[0], CV_8UC1, cv::Scalar(0));
     vec2f_t img_size_float = img_size.template cast<float>();
@@ -294,10 +264,10 @@ patch_t compute_patch(cloud_xyz_t::ConstPtr cloud, const std::vector<int>& subse
     }
 
     // blur height_map where there is no occupancy
-    //image_t blurred(img_size[1], img_size[0], CV_8UC1, 0), mask(img_size[1], img_size[0], CV_8UC1);
-    //cv::subtract(cv::Scalar::all(255), patch.occ_map, mask);
-    //cv::GaussianBlur(patch.height_map, blurred, cv::Size(9,9), 0);
-    //blurred.copyTo(patch.height_map, mask);
+    image_t blurred(img_size[1], img_size[0], CV_8UC1, 0), mask(img_size[1], img_size[0], CV_8UC1);
+    cv::subtract(cv::Scalar::all(255), patch.occ_map, mask);
+    cv::GaussianBlur(patch.height_map, blurred, cv::Size(9,9), 0);
+    blurred.copyTo(patch.height_map, mask);
 
     return patch;
 }
@@ -352,16 +322,18 @@ compressed_cloud_t::ptr_t compress_patches(const std::vector<patch_t>& patches, 
         cloud->bases[idx*9+8] = discretize<uint8_t>(patch.base(2, 2), -1.f, 1.f);
         height_maps.push_back(patch.height_map);
         occ_maps.push_back(patch.occ_map);
+        std::string outname = "/tmp/out/height_"+std::to_string(idx) + ".png";
+        cv::imwrite(outname.c_str(), patch.height_map);
         ++idx;
     }
 
-    stream_data_t jbig2_stream = jbig2_compress_stream(occ_maps);
+    chunks_t jbig2_chunks = jbig2_compress_images(occ_maps);
     chunks_t jpeg2k_chunks = jpeg2000_compress_images(height_maps, quality);
-    cloud->global_occ_data = jbig2_stream.global;
-    assert(jbig2_stream.chunks.size() == jpeg2k_chunks.size());
+    //cloud->global_occ_data = jbig2_stream.global;
+    assert(jbig2_chunks.size() == jpeg2k_chunks.size());
 
     for (uint32_t i = 0; i < jpeg2k_chunks.size(); ++i) {
-        cloud->patch_image_data.push_back(jbig2_stream.chunks[i]);
+        cloud->patch_image_data.push_back(jbig2_chunks[i]);
         cloud->patch_image_data.push_back(jpeg2k_chunks[i]);
     }
 

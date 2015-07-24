@@ -69,7 +69,7 @@ typedef struct compressed_cloud_ {
     std::vector<uint16_t> origins;
     std::vector<uint16_t> bboxes;
     std::vector<uint8_t>  bases;
-    chunk_ptr_t global_occ_data;
+    //chunk_ptr_t global_occ_data;
 
     // per-patch data
     chunks_t patch_image_data;
