@@ -1,9 +1,9 @@
-#ifndef JBIG2_TESTS_METRICS_HPP_
-#define JBIG2_TESTS_METRICS_HPP_
+#ifndef PCL_COMPRESS_TESTS_METRICS_HPP_
+#define PCL_COMPRESS_TESTS_METRICS_HPP_
 
 #include <types.hpp>
 
-namespace jbig2 {
+namespace pcl_compress {
 
 double compute_rmse(const std::vector<image_t>& images_0, const std::vector<image_t>& images_1) {
     if (images_0.size() != images_1.size()) {
@@ -25,16 +25,16 @@ double compute_rmse(const std::vector<image_t>& images_0, const std::vector<imag
         }
 
         double img_error = 0.0;
-        uint32_t error_count = 0;
+        //uint32_t error_count = 0;
         for (int row = 0; row < s_a.height; ++row) {
             const uint8_t* row_a = a.ptr(row);
             const uint8_t* row_b = b.ptr(row);
             for (int col = 0; col < s_a.width; ++col) {
                 uint8_t val_a = row_a[col];
                 uint8_t val_b = row_b[col];
-                double diff = static_cast<double>(val_a) - static_cast<double>(val_b);
-                img_error += diff * diff;
-                if (val_a != val_b) error_count++;
+                double diff = (val_a - val_b) != 0 ? 1.0 : 0.0;
+                img_error += diff;
+                //if (!!val_a != !!val_b) error_count++;
             }
         }
         //std::cout << "errors: " << error_count << "\n";
@@ -44,6 +44,6 @@ double compute_rmse(const std::vector<image_t>& images_0, const std::vector<imag
     return rmse / static_cast<double>(images_0.size());
 }
 
-} // jbig2
+} // pcl_compress
 
-#endif /* JBIG2_TESTS_METRICS_HPP_ */
+#endif /* PCL_COMPRESS_TESTS_METRICS_HPP_ */
