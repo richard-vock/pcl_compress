@@ -9,6 +9,9 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
+#define USE_CEREAL
+#include <cereal.hpp>
+
 namespace pcl_compress {
 
 
@@ -72,7 +75,19 @@ typedef struct compressed_cloud_ {
     //chunk_ptr_t global_occ_data;
 
     // per-patch data
-    chunks_t patch_image_data;
+    std::vector<std::vector<uint8_t>> patch_image_data;
+
+    template <typename Archive>
+    void serialize(Archive& ar) {
+        ar(num_patches);
+        ar(num_points);
+        ar(bbox_origins);
+        ar(bbox_bboxes);
+        ar(origins);
+        ar(bboxes);
+        ar(bases);
+        ar(patch_image_data);
+    }
 } compressed_cloud_t;
 
 

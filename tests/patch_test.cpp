@@ -90,7 +90,7 @@ int main (int argc, char const* argv[]) {
     compressed_cloud_t::ptr_t cc = compress_patches(patches, 35);
     uint32_t chars = 4 * 4 + 2*cc->origins.size() + 2*cc->bboxes.size() + cc->bases.size();
     for (const auto& chunk : cc->patch_image_data) {
-        chars += chunk->length;
+        chars += chunk.size();
     }
 
     uint64_t bytes_in = static_cast<uint64_t>(cloud_in->size() * 12);

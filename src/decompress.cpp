@@ -231,8 +231,18 @@ std::vector<patch_t> decompress_patches(compressed_cloud_t::const_ptr_t cloud) {
             rescale<uint8_t>(cloud->bases[idx*9+8], -1.f, 1.f)
         ;
 
-        patch.occ_map = jbig2_decompress_chunk(cloud->patch_image_data[idx*2 + 0]);
-        patch.height_map = jpeg2000_decompress_chunk(cloud->patch_image_data[idx*2 + 1]);
+        chunk_ptr_t chunk_jbig2(new chunk_t()), chunk_jpeg2k(new chunk_t());
+        chunk_jbig2->length = cloud->patch_image_data[idx*2 + 0].size();
+        chunk_jpeg2k->length = cloud->patch_image_data[idx*2 + 1].size();
+        chunk_jbig2->data = (uint8_t*)malloc(chunk_jbig2->length * sizeof(uint8_t));
+        chunk_jpeg2k->data = (uint8_t*)malloc(chunk_jpeg2k->length * sizeof(uint8_t));
+        const char* jbig2_data = reinterpret_cast<const char*>(cloud->patch_image_data[idx*2 + 0].data());
+        const char* jpeg2k_data = reinterpret_cast<const char*>(cloud->patch_image_data[idx*2 + 1].data());
+        memcpy((char*)chunk_jbig2->data, jbig2_data, chunk_jbig2->length * sizeof(uint8_t));
+        memcpy((char*)chunk_jpeg2k->data, jpeg2k_data, chunk_jpeg2k->length * sizeof(uint8_t));
+
+        patch.occ_map = jbig2_decompress_chunk(chunk_jbig2);
+        patch.height_map = jpeg2000_decompress_chunk(chunk_jpeg2k);
         std::string img_fn = "/tmp/patch_"+std::to_string(idx)+".png";
         cv::imwrite(img_fn, patch.occ_map);
 

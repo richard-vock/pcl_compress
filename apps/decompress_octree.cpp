@@ -56,53 +56,56 @@ int main (int argc, char const* argv[]) {
         return 1;
     }
 
-    std::ifstream in(file_in.c_str());
-    if (!in.good()) {
-        std::cerr << "Unable to open file \"" << file_in << "\" for reading." << "\n";
-        return 1;
-    }
     compressed_cloud_t::ptr_t cc(new compressed_cloud_t());
-    in.read((char*)&cc->num_patches, 4);
-    in.read((char*)&cc->num_points, 4);
-    in.read((char*)&cc->bbox_origins.min()[0], 4);
-    in.read((char*)&cc->bbox_origins.min()[1], 4);
-    in.read((char*)&cc->bbox_origins.min()[2], 4);
-    in.read((char*)&cc->bbox_origins.max()[0], 4);
-    in.read((char*)&cc->bbox_origins.max()[1], 4);
-    in.read((char*)&cc->bbox_origins.max()[2], 4);
-    in.read((char*)&cc->bbox_bboxes.min()[0], 4);
-    in.read((char*)&cc->bbox_bboxes.min()[1], 4);
-    in.read((char*)&cc->bbox_bboxes.min()[2], 4);
-    in.read((char*)&cc->bbox_bboxes.max()[0], 4);
-    in.read((char*)&cc->bbox_bboxes.max()[1], 4);
-    in.read((char*)&cc->bbox_bboxes.max()[2], 4);
+    deserialize(BINARY, file_in, *cc);
 
-    char* data = new char[3*sizeof(uint16_t)*cc->num_patches];
-    in.read(data, 3*sizeof(uint16_t)*cc->num_patches);
-    uint16_t* cast_data = reinterpret_cast<uint16_t*>(data);
-    cc->origins = std::vector<uint16_t>(cast_data, cast_data+(3*cc->num_patches));
-    delete [] data;
+    //std::ifstream in(file_in.c_str());
+    //if (!in.good()) {
+        //std::cerr << "Unable to open file \"" << file_in << "\" for reading." << "\n";
+        //return 1;
+    //}
+    //compressed_cloud_t::ptr_t cc(new compressed_cloud_t());
+    //in.read((char*)&cc->num_patches, 4);
+    //in.read((char*)&cc->num_points, 4);
+    //in.read((char*)&cc->bbox_origins.min()[0], 4);
+    //in.read((char*)&cc->bbox_origins.min()[1], 4);
+    //in.read((char*)&cc->bbox_origins.min()[2], 4);
+    //in.read((char*)&cc->bbox_origins.max()[0], 4);
+    //in.read((char*)&cc->bbox_origins.max()[1], 4);
+    //in.read((char*)&cc->bbox_origins.max()[2], 4);
+    //in.read((char*)&cc->bbox_bboxes.min()[0], 4);
+    //in.read((char*)&cc->bbox_bboxes.min()[1], 4);
+    //in.read((char*)&cc->bbox_bboxes.min()[2], 4);
+    //in.read((char*)&cc->bbox_bboxes.max()[0], 4);
+    //in.read((char*)&cc->bbox_bboxes.max()[1], 4);
+    //in.read((char*)&cc->bbox_bboxes.max()[2], 4);
 
-    data = new char[6*sizeof(uint16_t)*cc->num_patches];
-    in.read(data, 6*sizeof(uint16_t)*cc->num_patches);
-    cast_data = reinterpret_cast<uint16_t*>(data);
-    cc->bboxes = std::vector<uint16_t>(cast_data, cast_data+(6*cc->num_patches));
-    delete [] data;
+    //char* data = new char[3*sizeof(uint16_t)*cc->num_patches];
+    //in.read(data, 3*sizeof(uint16_t)*cc->num_patches);
+    //uint16_t* cast_data = reinterpret_cast<uint16_t*>(data);
+    //cc->origins = std::vector<uint16_t>(cast_data, cast_data+(3*cc->num_patches));
+    //delete [] data;
 
-    data = new char[9*sizeof(uint8_t)*cc->num_patches];
-    in.read(data, 9*sizeof(uint8_t)*cc->num_patches);
-    cast_data = reinterpret_cast<uint16_t*>(data);
-    cc->bases = std::vector<uint8_t>(cast_data, cast_data+(9*cc->num_patches));
-    delete [] data;
+    //data = new char[6*sizeof(uint16_t)*cc->num_patches];
+    //in.read(data, 6*sizeof(uint16_t)*cc->num_patches);
+    //cast_data = reinterpret_cast<uint16_t*>(data);
+    //cc->bboxes = std::vector<uint16_t>(cast_data, cast_data+(6*cc->num_patches));
+    //delete [] data;
 
-    for (uint32_t i = 0; i < 2*static_cast<uint32_t>(cc->num_patches); ++i) {
-        chunk_ptr_t chunk(new chunk_t());
-        in.read((char*)&chunk->length, sizeof(int));
-        chunk->data = (uint8_t*)malloc(chunk->length * sizeof(uint8_t));
-        in.read((char*)chunk->data, chunk->length * sizeof(uint8_t));
-        cc->patch_image_data.push_back(chunk);
-    }
-    in.close();
+    //data = new char[9*sizeof(uint8_t)*cc->num_patches];
+    //in.read(data, 9*sizeof(uint8_t)*cc->num_patches);
+    //cast_data = reinterpret_cast<uint16_t*>(data);
+    //cc->bases = std::vector<uint8_t>(cast_data, cast_data+(9*cc->num_patches));
+    //delete [] data;
+
+    //for (uint32_t i = 0; i < 2*static_cast<uint32_t>(cc->num_patches); ++i) {
+        //chunk_ptr_t chunk(new chunk_t());
+        //in.read((char*)&chunk->length, sizeof(int));
+        //chunk->data = (uint8_t*)malloc(chunk->length * sizeof(uint8_t));
+        //in.read((char*)chunk->data, chunk->length * sizeof(uint8_t));
+        //cc->patch_image_data.push_back(chunk);
+    //}
+    //in.close();
 
     std::cout << "decompressing" << "\n";
     std::vector<patch_t> dec_patches = decompress_patches(cc);

@@ -87,7 +87,7 @@ int main (int argc, char const* argv[]) {
     compressed_cloud_t::ptr_t cc = compress_patches(patches, 35);
     uint32_t chars = 4 * 4 + 2*cc->origins.size() + 2*cc->bboxes.size() + cc->bases.size();
     for (const auto& chunk : cc->patch_image_data) {
-        chars += chunk->length;
+        chars += chunk.size();
     }
 
     uint64_t bytes_in = static_cast<uint64_t>(cloud_in->size() * 12);
@@ -97,38 +97,40 @@ int main (int argc, char const* argv[]) {
     std::cout << "compression factor: " << c_factor << "\n";
     std::cout << "bpp: " << bpp << "\n";
 
-    std::ofstream out(file_out.c_str());
-    if (!out.good()) {
-        std::cerr << "Unable to open file \"" << file_out << "\" for writing." << "\n";
-        return 1;
-    }
-    out.write((const char*)&cc->num_patches, 4);
-    out.write((const char*)&cc->num_points, 4);
-    out.write((const char*)&cc->bbox_origins.min()[0], 4);
-    out.write((const char*)&cc->bbox_origins.min()[1], 4);
-    out.write((const char*)&cc->bbox_origins.min()[2], 4);
-    out.write((const char*)&cc->bbox_origins.max()[0], 4);
-    out.write((const char*)&cc->bbox_origins.max()[1], 4);
-    out.write((const char*)&cc->bbox_origins.max()[2], 4);
-    out.write((const char*)&cc->bbox_bboxes.min()[0], 4);
-    out.write((const char*)&cc->bbox_bboxes.min()[1], 4);
-    out.write((const char*)&cc->bbox_bboxes.min()[2], 4);
-    out.write((const char*)&cc->bbox_bboxes.max()[0], 4);
-    out.write((const char*)&cc->bbox_bboxes.max()[1], 4);
-    out.write((const char*)&cc->bbox_bboxes.max()[2], 4);
+    serialize(BINARY, file_out, *cc);
 
-    const char* data = reinterpret_cast<const char*>(cc->origins.data());
-    out.write(data, cc->origins.size()*sizeof(uint16_t));
+    //std::ofstream out(file_out.c_str());
+    //if (!out.good()) {
+        //std::cerr << "Unable to open file \"" << file_out << "\" for writing." << "\n";
+        //return 1;
+    //}
+    //out.write((const char*)&cc->num_patches, 4);
+    //out.write((const char*)&cc->num_points, 4);
+    //out.write((const char*)&cc->bbox_origins.min()[0], 4);
+    //out.write((const char*)&cc->bbox_origins.min()[1], 4);
+    //out.write((const char*)&cc->bbox_origins.min()[2], 4);
+    //out.write((const char*)&cc->bbox_origins.max()[0], 4);
+    //out.write((const char*)&cc->bbox_origins.max()[1], 4);
+    //out.write((const char*)&cc->bbox_origins.max()[2], 4);
+    //out.write((const char*)&cc->bbox_bboxes.min()[0], 4);
+    //out.write((const char*)&cc->bbox_bboxes.min()[1], 4);
+    //out.write((const char*)&cc->bbox_bboxes.min()[2], 4);
+    //out.write((const char*)&cc->bbox_bboxes.max()[0], 4);
+    //out.write((const char*)&cc->bbox_bboxes.max()[1], 4);
+    //out.write((const char*)&cc->bbox_bboxes.max()[2], 4);
 
-    data = reinterpret_cast<const char*>(cc->bboxes.data());
-    out.write(data, cc->bboxes.size()*sizeof(uint16_t));
+    //const char* data = reinterpret_cast<const char*>(cc->origins.data());
+    //out.write(data, cc->origins.size()*sizeof(uint16_t));
 
-    data = reinterpret_cast<const char*>(cc->bases.data());
-    out.write(data, cc->bases.size()*sizeof(uint8_t));
+    //data = reinterpret_cast<const char*>(cc->bboxes.data());
+    //out.write(data, cc->bboxes.size()*sizeof(uint16_t));
 
-    for (const auto& chunk : cc->patch_image_data) {
-        out.write((const char*)&chunk->length, sizeof(int));
-        out.write((const char*)&chunk->data, sizeof(uint8_t)*chunk->length);
-    }
-    out.close();
+    //data = reinterpret_cast<const char*>(cc->bases.data());
+    //out.write(data, cc->bases.size()*sizeof(uint8_t));
+
+    //for (const auto& chunk : cc->patch_image_data) {
+        //out.write((const char*)&chunk->length, sizeof(int));
+        //out.write((const char*)&chunk->data, sizeof(uint8_t)*chunk->length);
+    //}
+    //out.close();
 }

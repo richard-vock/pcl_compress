@@ -281,6 +281,7 @@ IntegerType discretize(float value, float min_value, float max_value) {
     return static_cast<IntegerType>(normalized * static_cast<float>(max_rep));
 }
 
+
 compressed_cloud_t::ptr_t compress_patches(const std::vector<patch_t>& patches, int quality) {
     compressed_cloud_t::ptr_t cloud(new compressed_cloud_t());
 
@@ -333,8 +334,10 @@ compressed_cloud_t::ptr_t compress_patches(const std::vector<patch_t>& patches, 
     assert(jbig2_chunks.size() == jpeg2k_chunks.size());
 
     for (uint32_t i = 0; i < jpeg2k_chunks.size(); ++i) {
-        cloud->patch_image_data.push_back(jbig2_chunks[i]);
-        cloud->patch_image_data.push_back(jpeg2k_chunks[i]);
+        std::vector<uint8_t> chunk_jbig2(jbig2_chunks[i]->data, jbig2_chunks[i]->data + jbig2_chunks[i]->length);
+        std::vector<uint8_t> chunk_jpeg2k(jpeg2k_chunks[i]->data, jpeg2k_chunks[i]->data + jpeg2k_chunks[i]->length);
+        cloud->patch_image_data.push_back(chunk_jbig2);
+        cloud->patch_image_data.push_back(chunk_jpeg2k);
     }
 
     return cloud;
