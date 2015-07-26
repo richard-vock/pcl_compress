@@ -12,9 +12,9 @@ namespace po = boost::program_options;
 
 #include <compress.hpp>
 #include <decompress.hpp>
+#include <decomposition.hpp>
 
 #include <pcl/io/pcd_io.h>
-#include <pcl/octree/octree.h>
 
 using namespace pcl_compress;
 
@@ -70,15 +70,10 @@ int main (int argc, char const* argv[]) {
     for (const auto& p : cloud_in->points) {
         bbox.extend(p.getVector3fMap());
     }
-    pcl::octree::OctreePointCloud<point_xyz_t> octree(0.03f * bbox.diagonal().norm());
-    octree.setInputCloud(cloud_in);
-    octree.addPointsFromInputCloud();
+    decomposition_t decomp = octree_decomposition<point_xyz_t>(cloud_in, 0.03f * bbox.diagonal().norm());
 
     std::vector<patch_t> patches;
-    for (auto it = octree.leaf_begin(); it != octree.leaf_end(); ++it) {
-        std::vector<int> subset;
-        it.getLeafContainer().getPointIndices(subset);
-        if (subset.size() < 5) continue;
+    for (const auto& subset : decomp) {
         patch_t patch = compute_patch(cloud_in, subset, px_factor, px_epsilon, min_img_size);
         patches.push_back(patch);
     }

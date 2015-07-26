@@ -67,6 +67,9 @@ if (OPENCV_CORE_FOUND AND OPENCV_HIGHGUI_FOUND AND LEPTONICA_FOUND AND JBIG2ENC_
     # patch test
     add_executable(patch_test "tests/patch_test.cpp")
     target_link_libraries(patch_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
+    # serialize__octree_decomp
+    add_executable(serialize_octree_decomp "tests/serialize_octree_decomp.cpp")
+    target_link_libraries(serialize_octree_decomp ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
 
 	# install binary
     if (WIN32)
