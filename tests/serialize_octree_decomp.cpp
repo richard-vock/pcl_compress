@@ -18,41 +18,42 @@ namespace po = boost::program_options;
 
 using namespace pcl_compress;
 
+int
+main(int argc, char const* argv[]) {
+    std::string file_in;
+    std::string file_out;
 
-int main (int argc, char const* argv[]) {
-	std::string  file_in;
-	std::string  file_out;
+    po::options_description desc("jpeg2000_test command line options");
+    desc.add_options()("help,h", "Help message")(
+        "input-file,i", po::value<std::string>(&file_in)->required(),
+        "Input file")("output-file,o",
+                      po::value<std::string>(&file_out)->required(),
+                      "Output file");
 
-	po::options_description desc("jpeg2000_test command line options");
-	desc.add_options()
-		("help,h",  "Help message")
-		("input-file,i",     po::value<std::string>(&file_in)->required(), "Input file")
-		("output-file,o",    po::value<std::string>(&file_out)->required(), "Output file")
-	;
-
-	// Check for required options.
-	po::variables_map vm;
-	bool optionsException = false;
-	try {
-		po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
-		//po::store(po::parse_command_line(argc, argv, desc), vm);
-		po::notify(vm);
-	} catch (std::exception& e) {
-		if (!vm.count("help")) {
-			std::cout << e.what() << "\n";
-		}
-		optionsException = true;
-	}
-	if (optionsException || vm.count("help")) {
-		std::cout << desc << "\n";
-		return optionsException ? 1 : 0;
-	}
+    // Check for required options.
+    po::variables_map vm;
+    bool optionsException = false;
+    try {
+        po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+        // po::store(po::parse_command_line(argc, argv, desc), vm);
+        po::notify(vm);
+    } catch (std::exception& e) {
+        if (!vm.count("help")) {
+            std::cout << e.what() << "\n";
+        }
+        optionsException = true;
+    }
+    if (optionsException || vm.count("help")) {
+        std::cout << desc << "\n";
+        return optionsException ? 1 : 0;
+    }
 
     fs::path path_in(file_in);
     fs::path path_out(file_out);
 
     if (!fs::exists(file_in)) {
-        std::cerr << "Input file does not exist" << "\n";
+        std::cerr << "Input file does not exist"
+                  << "\n";
         return 1;
     }
 
@@ -63,7 +64,8 @@ int main (int argc, char const* argv[]) {
     for (const auto& p : cloud_in->points) {
         bbox.extend(p.getVector3fMap());
     }
-    decomposition_t decomp = octree_decomposition<point_xyz_t>(cloud_in, 0.03f * bbox.diagonal().norm());
+    decomposition_t decomp = octree_decomposition<point_xyz_t>(
+        cloud_in, 0.03f * bbox.diagonal().norm());
 
     serialize(BINARY, file_out, decomp);
 }

@@ -70,7 +70,8 @@ int main (int argc, char const* argv[]) {
     for (const auto& p : cloud_in->points) {
         bbox.extend(p.getVector3fMap());
     }
-    decomposition_t decomp = octree_decomposition<point_xyz_t>(cloud_in, 0.03f * bbox.diagonal().norm());
+    decomposition_t decomp = octree_decomposition<point_xyz_t>(
+        cloud_in, 0.03f * bbox.diagonal().norm());
 
     std::vector<patch_t> patches;
     for (const auto& subset : decomp) {

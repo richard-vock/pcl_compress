@@ -32,7 +32,7 @@ typedef Eigen::Vector2i                 vec2i_t;
 typedef Eigen::Vector2f                 vec2f_t;
 typedef Eigen::Vector3f                 vec3f_t;
 typedef Eigen::Matrix3f                 base_t;
-typedef Eigen::AlignedBox<float, 2>     bbox2f_t;
+typedef Eigen::AlignedBox<float, 2> bbox2f_t;
 typedef Eigen::AlignedBox<float, 3>     bbox3f_t;
 
 typedef struct patch_ {

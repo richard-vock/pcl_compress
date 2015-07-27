@@ -2,7 +2,6 @@
 
 namespace pcl_compress {
 
-
 quadtree::quadtree(const std::vector<vec2f_t>& points, const params_t& params) {
     bbox2f_t bbox;
     for (const auto& p : points) {
@@ -13,35 +12,44 @@ quadtree::quadtree(const std::vector<vec2f_t>& points, const params_t& params) {
     root_ = std::make_shared<node>(bbox, points, subset, params);
 }
 
-quadtree::~quadtree() {
-}
+quadtree::~quadtree() {}
 
-quadtree::node_iterator quadtree::nodes_begin() {
+quadtree::node_iterator
+quadtree::nodes_begin() {
     return node_iterator(node::wptr_t(root_));
 }
 
-quadtree::node_iterator quadtree::nodes_end() {
+quadtree::node_iterator
+quadtree::nodes_end() {
     return node_iterator();
 }
 
-range<quadtree::node_iterator> quadtree::nodes() {
+range<quadtree::node_iterator>
+quadtree::nodes() {
     return range<node_iterator>(std::make_pair(nodes_begin(), nodes_end()));
 }
 
-quadtree::leaf_iterator quadtree::leaves_begin() {
+quadtree::leaf_iterator
+quadtree::leaves_begin() {
     return leaf_iterator(node::wptr_t(root_));
 }
 
-quadtree::leaf_iterator quadtree::leaves_end() {
+quadtree::leaf_iterator
+quadtree::leaves_end() {
     return leaf_iterator();
 }
 
-range<quadtree::leaf_iterator> quadtree::leaves() {
+range<quadtree::leaf_iterator>
+quadtree::leaves() {
     return range<leaf_iterator>(std::make_pair(leaves_begin(), leaves_end()));
 }
 
-quadtree::node::node(const bbox2f_t& bbox, const std::vector<vec2f_t>& points, const indices_t& subset, const params_t& params, uint32_t depth) : bbox_(bbox) {
-    if (depth >= params.max_depth || subset.size() <= params.max_points_per_cell) {
+quadtree::node::node(const bbox2f_t& bbox, const std::vector<vec2f_t>& points,
+                     const indices_t& subset, const params_t& params,
+                     uint32_t depth)
+    : bbox_(bbox) {
+    if (depth >= params.max_depth ||
+        subset.size() <= params.max_points_per_cell) {
         indices_ = subset;
     } else {
         vec2f_t center = bbox.center();
@@ -59,43 +67,46 @@ quadtree::node::node(const bbox2f_t& bbox, const std::vector<vec2f_t>& points, c
             // add center and corner to new bbox
             bbox2f_t sub_bbox;
             sub_bbox.extend(center);
-            vec2f_t corner(
-                (i%2) ? (bbox.max()[0]) : (bbox.min()[0]),
-                (i/2) ? (bbox.max()[1]) : (bbox.min()[1])
-            );
+            vec2f_t corner((i % 2) ? (bbox.max()[0]) : (bbox.min()[0]),
+                           (i / 2) ? (bbox.max()[1]) : (bbox.min()[1]));
             sub_bbox.extend(corner);
-            children_.push_back(std::make_shared<node>(sub_bbox, points, sub_indices, params, depth+1));
+            children_.push_back(std::make_shared<node>(
+                sub_bbox, points, sub_indices, params, depth + 1));
         }
     }
 }
 
-quadtree::node::~node() {
-}
+quadtree::node::~node() {}
 
-quadtree::node::indices_t& quadtree::node::indices() {
+quadtree::node::indices_t&
+quadtree::node::indices() {
     return indices_;
 }
 
-const quadtree::node::indices_t& quadtree::node::indices() const {
+const quadtree::node::indices_t&
+quadtree::node::indices() const {
     return indices_;
 }
 
-std::vector<quadtree::node::ptr_t>& quadtree::node::children() {
+std::vector<quadtree::node::ptr_t>&
+quadtree::node::children() {
     return children_;
 }
 
-const std::vector<quadtree::node::ptr_t>& quadtree::node::children() const {
+const std::vector<quadtree::node::ptr_t>&
+quadtree::node::children() const {
     return children_;
 }
 
-bool quadtree::node::inside_(uint32_t quadrant, const vec2f_t& point, const vec2f_t& center) {
-    const bool b0 = !std::signbit(point[0] - center[0]); // true if right
-    const bool b1 = !std::signbit(point[1] - center[1]); // true if top
-    return b0 == (quadrant%2) && b1 == (quadrant/2);
+bool
+quadtree::node::inside_(uint32_t quadrant, const vec2f_t& point,
+                        const vec2f_t& center) {
+    const bool b0 = !std::signbit(point[0] - center[0]);  // true if right
+    const bool b1 = !std::signbit(point[1] - center[1]);  // true if top
+    return b0 == (quadrant % 2) && b1 == (quadrant / 2);
 }
 
-quadtree::node_iterator::node_iterator() : node_() {
-}
+quadtree::node_iterator::node_iterator() : node_() {}
 
 quadtree::node_iterator::node_iterator(node::wptr_t node) : node_(node) {
     if (auto n = node.lock()) {
@@ -107,8 +118,7 @@ quadtree::node_iterator::node_iterator(node::wptr_t node) : node_(node) {
     }
 }
 
-quadtree::node_iterator::~node_iterator() {
-}
+quadtree::node_iterator::~node_iterator() {}
 
 quadtree::node_iterator& quadtree::node_iterator::operator++() {
     if (queue_.empty()) {
@@ -129,9 +139,7 @@ bool quadtree::node_iterator::operator!=(const node_iterator& other) {
     return !this->operator==(other);
 }
 
-quadtree::node_iterator::operator bool() const {
-    return !(node_.lock());
-}
+quadtree::node_iterator::operator bool() const { return !(node_.lock()); }
 
 quadtree::node& quadtree::node_iterator::operator*() {
     if (auto n = node_.lock()) {
@@ -147,7 +155,8 @@ const quadtree::node& quadtree::node_iterator::operator*() const {
     throw std::runtime_error("Dereferencing invalid node_iterator");
 }
 
-void quadtree::node_iterator::update_queue_() {
+void
+quadtree::node_iterator::update_queue_() {
     if (auto n = node_.lock()) {
         for (auto& c : n->children()) {
             if (c) {
@@ -157,15 +166,14 @@ void quadtree::node_iterator::update_queue_() {
     }
 }
 
-quadtree::leaf_iterator::leaf_iterator() : quadtree::node_iterator() {
-}
+quadtree::leaf_iterator::leaf_iterator() : quadtree::node_iterator() {}
 
-quadtree::leaf_iterator::leaf_iterator(node::wptr_t node) : quadtree::node_iterator(node) {
+quadtree::leaf_iterator::leaf_iterator(node::wptr_t node)
+    : quadtree::node_iterator(node) {
     this->operator++();
 }
 
-quadtree::leaf_iterator::~leaf_iterator() {
-}
+quadtree::leaf_iterator::~leaf_iterator() {}
 
 quadtree::leaf_iterator& quadtree::leaf_iterator::operator++() {
     while (auto n = node_.lock()) {
@@ -175,4 +183,4 @@ quadtree::leaf_iterator& quadtree::leaf_iterator::operator++() {
     return *this;
 }
 
-} // pcl_compress
+}  // pcl_compress
