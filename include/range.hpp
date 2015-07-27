@@ -7,7 +7,7 @@ namespace pcl_compress {
 
 template <class Iter>
 class range : public std::pair<Iter, Iter> {
-   public:
+public:
     range(const std::pair<Iter, Iter>& x) : std::pair<Iter, Iter>(x) {}
     virtual ~range() {}
 

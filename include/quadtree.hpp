@@ -11,7 +11,7 @@
 namespace pcl_compress {
 
 class quadtree {
-   public:
+public:
     typedef std::shared_ptr<quadtree> ptr_t;
     typedef std::shared_ptr<const quadtree> cptr_t;
 
@@ -26,7 +26,7 @@ class quadtree {
     typedef std::shared_ptr<node> node_ptr_t;
     typedef std::shared_ptr<const node> node_cptr_t;
 
-   public:
+public:
     quadtree(const std::vector<vec2f_t>& points, const params_t& params);
     virtual ~quadtree();
 
@@ -39,19 +39,19 @@ class quadtree {
     range<node_iterator> nodes();
     range<leaf_iterator> leaves();
 
-   protected:
+protected:
     node_ptr_t root_;
 };
 
 class quadtree::node {
-   public:
+public:
     typedef std::shared_ptr<node> ptr_t;
     typedef std::weak_ptr<node> wptr_t;
     typedef std::shared_ptr<const node> const_cptr_t;
     typedef std::weak_ptr<const node> const_cwptr_t;
     typedef std::vector<int> indices_t;
 
-   public:
+public:
     node(const bbox2f_t& bbox, const std::vector<vec2f_t>& points,
          const indices_t& subset, const params_t& params, uint32_t depth = 0);
     virtual ~node();
@@ -62,18 +62,18 @@ class quadtree::node {
     std::vector<ptr_t>& children();
     const std::vector<ptr_t>& children() const;
 
-   protected:
+protected:
     static bool inside_(uint32_t quadrant, const vec2f_t& point,
                         const vec2f_t& center);
 
-   protected:
+protected:
     std::vector<ptr_t> children_;
     bbox2f_t bbox_;
     indices_t indices_;
 };
 
 class quadtree::node_iterator {
-   public:
+public:
     node_iterator();
     node_iterator(node::wptr_t node);
     virtual ~node_iterator();
@@ -86,24 +86,26 @@ class quadtree::node_iterator {
 
     node& operator*();
     const node& operator*() const;
+    node* operator->();
+    const node* operator->() const;
 
-   protected:
+protected:
     void update_queue_();
 
-   protected:
+protected:
     node::wptr_t node_;
     std::deque<node::wptr_t> queue_;
 };
 
 class quadtree::leaf_iterator : public quadtree::node_iterator {
-   public:
+public:
     leaf_iterator();
     leaf_iterator(node::wptr_t node);
     virtual ~leaf_iterator();
 
     leaf_iterator& operator++();
 
-   protected:
+protected:
     node::wptr_t node_;
     std::deque<node::wptr_t> queue_;
 };

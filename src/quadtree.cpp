@@ -155,6 +155,20 @@ const quadtree::node& quadtree::node_iterator::operator*() const {
     throw std::runtime_error("Dereferencing invalid node_iterator");
 }
 
+quadtree::node* quadtree::node_iterator::operator->() {
+    if (auto n = node_.lock()) {
+        return n.get();
+    }
+    throw std::runtime_error("Dereferencing invalid node_iterator");
+}
+
+const quadtree::node* quadtree::node_iterator::operator->() const {
+    if (auto n = node_.lock()) {
+        return n.get();
+    }
+    throw std::runtime_error("Dereferencing invalid node_iterator");
+}
+
 void
 quadtree::node_iterator::update_queue_() {
     if (auto n = node_.lock()) {
