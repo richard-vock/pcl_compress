@@ -64,5 +64,6 @@ int main (int argc, char const* argv[]) {
     std::cout << "done" << "\n";
 
     cloud_xyz_t::Ptr cloud_out = from_patches(dec_patches);
+    std::cout << "Reconstructed cloud with " << cloud_out->size() << " points." << "\n";
     pcl::io::savePCDFileBinary(path_out.string(), *cloud_out);
 }

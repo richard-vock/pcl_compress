@@ -42,7 +42,7 @@ struct test_compress_patches : ::unittest::testcase<test_context> {
 
         auto context = std::make_shared<test_context>();
         for (const auto& subset : decomp) {
-            patch_t patch = compute_patch(cloud_in, subset, img_size);
+            patch_t patch = compute_patch(cloud_in, subset, img_size, 0);
             context->patches.push_back(patch);
         }
 

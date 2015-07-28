@@ -98,9 +98,12 @@ primitive_decomposition(typename pcl::PointCloud<PointT>::ConstPtr cloud,
 
     // use octree decomposition for all remaining points
     if (residual.size() > 5) {
-        decomp.push_back(residual);
-        //decomposition_t res_decomp =
-            //octree_decomposition<PointT>(cloud, residual_leaf_size, residual);
+        //decomp.push_back(residual);
+        decomposition_t res_decomp =
+            octree_decomposition<PointT>(cloud, residual_leaf_size, residual);
+        for (const auto& subset : res_decomp) {
+            if (subset.size() > 5) decomp.push_back(subset);
+        }
         //decomp.insert(decomp.end(), res_decomp.begin(), res_decomp.end());
     } else {
         std::cout << "no residual" << "\n";

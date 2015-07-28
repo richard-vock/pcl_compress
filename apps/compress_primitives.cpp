@@ -23,17 +23,17 @@ main(int argc, char const* argv[]) {
     std::string file_in;
     std::string file_out;
     vec2i_t img_size;
+    uint32_t blur_iters;
+    int32_t max_points;
 
     po::options_description desc("jpeg2000_test command line options");
     desc.add_options()("help,h", "Help message")(
-        "input-file,i", po::value<std::string>(&file_in)->required(),
-        "Input file")("output-file,o",
-                      po::value<std::string>(&file_out)->required(),
-                      "Output file")(
-        "img-width,x", po::value<int>(&img_size[0])->default_value(32),
-        "Image width")("img-height,y",
-                       po::value<int>(&img_size[1])->default_value(32),
-                       "Image height");
+        "input-file,i", po::value<std::string>(&file_in)->required(), "Input file")
+        ("output-file,o", po::value<std::string>(&file_out)->required(), "Output file")
+        ("img-size,s", po::value<int>(&img_size[0])->default_value(32), "Image width and height")
+        ("blur-iterations,b", po::value<uint32_t>(&blur_iters)->default_value(8), "Number of blur iterations")
+        ("max-points-per-cell,m", po::value<int32_t>(&max_points)->default_value(-1), "Point count threshold for subdividing quadtree cells (Default: -1 => Use img-size * img-size).")
+    ;
 
     // Check for required options.
     po::variables_map vm;
@@ -52,6 +52,9 @@ main(int argc, char const* argv[]) {
         std::cout << desc << "\n";
         return optionsException ? 1 : 0;
     }
+
+    img_size[1] = img_size[0];
+    if (max_points < 0) max_points = img_size[0] * img_size[1];
 
     fs::path path_in(file_in);
     fs::path path_out(file_out);
@@ -78,11 +81,11 @@ main(int argc, char const* argv[]) {
         0.001f  // probability_threshold
     };
     decomposition_t decomp = primitive_decomposition<point_normal_t>(
-        cloud_in, params, 1024, 6, 0.03f * bbox.diagonal().norm());
+        cloud_in, params, max_points, 6, 0.03f * bbox.diagonal().norm());
 
     std::vector<patch_t> patches;
     for (const auto& subset : decomp) {
-        patch_t patch = compute_patch(cloud_in, subset, img_size);
+        patch_t patch = compute_patch(cloud_in, subset, img_size, blur_iters);
         patches.push_back(patch);
     }
 

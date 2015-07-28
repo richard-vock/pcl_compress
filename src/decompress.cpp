@@ -236,8 +236,6 @@ std::vector<patch_t> decompress_patches(compressed_cloud_t::const_ptr_t cloud) {
 
         patch.occ_map = jbig2_decompress_chunk(chunk_jbig2);
         patch.height_map = jpeg2000_decompress_chunk(chunk_jpeg2k);
-        std::string img_fn = "/tmp/patch_"+std::to_string(idx)+".png";
-        cv::imwrite(img_fn, patch.occ_map);
 
         ++idx;
     }

@@ -308,7 +308,7 @@ compute_patch(cloud_xyz_t::ConstPtr cloud, const std::vector<int>& subset,
 
 patch_t
 compute_patch(cloud_normal_t::ConstPtr cloud, const std::vector<int>& subset,
-              const vec2i_t& img_size) {
+              const vec2i_t& img_size, uint32_t blur_iters) {
     patch_t patch;
 
     // compute local base
@@ -341,11 +341,15 @@ compute_patch(cloud_normal_t::ConstPtr cloud, const std::vector<int>& subset,
     }
 
     // blur height_map where there is no occupancy
-    image_t blurred(img_size[1], img_size[0], CV_8UC1, 0),
-        mask(img_size[1], img_size[0], CV_8UC1);
-    cv::subtract(cv::Scalar::all(255), patch.occ_map, mask);
-    cv::GaussianBlur(patch.height_map, blurred, cv::Size(9, 9), 0);
-    blurred.copyTo(patch.height_map, mask);
+    if (blur_iters) {
+        image_t blurred(img_size[1], img_size[0], CV_8UC1, 0),
+            mask(img_size[1], img_size[0], CV_8UC1);
+        cv::subtract(cv::Scalar::all(255), patch.occ_map, mask);
+        for (uint32_t i = 0; i < blur_iters; ++i) {
+            cv::GaussianBlur(patch.height_map, blurred, cv::Size(5, 5), 0);
+            blurred.copyTo(patch.height_map, mask);
+        }
+    }
 
     return patch;
 }
@@ -420,8 +424,8 @@ compress_patches(const std::vector<patch_t>& patches, int quality) {
             discretize<uint8_t>(patch.base(2, 2), -1.f, 1.f);
         height_maps.push_back(patch.height_map);
         occ_maps.push_back(patch.occ_map);
-        std::string outname = "/tmp/out/height_" + std::to_string(idx) + ".png";
-        cv::imwrite(outname.c_str(), patch.height_map);
+        //std::string outname = "/tmp/out/height_" + std::to_string(idx) + ".png";
+        //cv::imwrite(outname.c_str(), patch.height_map);
         ++idx;
     }
 
