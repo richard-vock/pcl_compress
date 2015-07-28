@@ -216,6 +216,9 @@ compute_base_(typename pcl::PointCloud<PointT>::ConstPtr cloud,
     Eigen::JacobiSVD<Eigen::MatrixXf> svd(
         pos_mat, Eigen::ComputeThinU | Eigen::ComputeThinV);
     base_t base = svd.matrixV().block<3, 3>(0, 0);
+    base.col(1) = (1.f - fabs(base(2,2))) < Eigen::NumTraits<float>::dummy_precision() ? vec3f_t::UnitX() : vec3f_t::UnitZ();
+    base.col(0) = base.col(1).cross(base.col(2)).normalized();
+    base.col(1) = base.col(2).cross(base.col(0)).normalized();
     return base;
 }
 
@@ -271,6 +274,50 @@ compute_patch(cloud_xyz_t::ConstPtr cloud, const std::vector<int>& subset,
                            .unaryExpr([](float x) { return std::ceil(x); })
                            .template cast<int>();
     img_size = img_size.cwiseMax(min_img_size);
+    // std::cout << img_size.transpose() << "\n";
+    patch.height_map =
+        image_t(img_size[1], img_size[0], CV_8UC1, cv::Scalar(0));
+    patch.occ_map = image_t(img_size[1], img_size[0], CV_8UC1, cv::Scalar(0));
+    vec2f_t img_size_float = img_size.template cast<float>();
+    patch.num_points = 0;
+    for (const auto& p : local_coords) {
+        vec2i_t uv = p.head(2)
+                         .cwiseProduct(img_size_float)
+                         .unaryExpr([](float x) { return std::floor(x); })
+                         .template cast<int>();
+        uv[0] = std::min(uv[0], img_size[0] - 1);
+        uv[1] = std::min(uv[1], img_size[1] - 1);
+
+        patch.height_map.at<uint8_t>(uv[1], uv[0]) =
+            static_cast<uint8_t>(p[2] * 255.f);
+        if (patch.occ_map.at<uint8_t>(uv[1], uv[0]) == 0) {
+            patch.num_points += 1;
+        }
+        patch.occ_map.at<uint8_t>(uv[1], uv[0]) = uint8_t(255);
+    }
+
+    // blur height_map where there is no occupancy
+    image_t blurred(img_size[1], img_size[0], CV_8UC1, 0),
+        mask(img_size[1], img_size[0], CV_8UC1);
+    cv::subtract(cv::Scalar::all(255), patch.occ_map, mask);
+    cv::GaussianBlur(patch.height_map, blurred, cv::Size(9, 9), 0);
+    blurred.copyTo(patch.height_map, mask);
+
+    return patch;
+}
+
+patch_t
+compute_patch(cloud_normal_t::ConstPtr cloud, const std::vector<int>& subset,
+              const vec2i_t& img_size) {
+    patch_t patch;
+
+    // compute local base
+    patch.base = compute_base_<point_normal_t>(cloud, subset, patch.origin);
+
+    // project into local base and compute local bounding box
+    std::vector<vec3f_t> local_coords;
+    project_and_normalize_<point_normal_t>(cloud, subset, patch, local_coords);
+
     // std::cout << img_size.transpose() << "\n";
     patch.height_map =
         image_t(img_size[1], img_size[0], CV_8UC1, cv::Scalar(0));

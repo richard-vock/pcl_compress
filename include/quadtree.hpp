@@ -104,10 +104,6 @@ public:
     virtual ~leaf_iterator();
 
     leaf_iterator& operator++();
-
-protected:
-    node::wptr_t node_;
-    std::deque<node::wptr_t> queue_;
 };
 
 }  // pcl_compress

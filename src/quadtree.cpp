@@ -109,7 +109,7 @@ quadtree::node::inside_(uint32_t quadrant, const vec2f_t& point,
 quadtree::node_iterator::node_iterator() : node_() {}
 
 quadtree::node_iterator::node_iterator(node::wptr_t node) : node_(node) {
-    if (auto n = node.lock()) {
+    if (auto n = node_.lock()) {
         for (auto& c : n->children()) {
             if (c) {
                 queue_.push_back(node::wptr_t(c));
@@ -184,16 +184,18 @@ quadtree::leaf_iterator::leaf_iterator() : quadtree::node_iterator() {}
 
 quadtree::leaf_iterator::leaf_iterator(node::wptr_t node)
     : quadtree::node_iterator(node) {
+    node::ptr_t p = node_.lock();
     this->operator++();
 }
 
 quadtree::leaf_iterator::~leaf_iterator() {}
 
 quadtree::leaf_iterator& quadtree::leaf_iterator::operator++() {
-    while (auto n = node_.lock()) {
-        if (n->children().empty()) break;
+    node::ptr_t cur;
+    do {
         node_iterator::operator++();
-    }
+        cur = node_.lock();
+    } while(cur && cur->children().size());
     return *this;
 }
 

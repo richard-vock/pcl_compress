@@ -4,6 +4,9 @@
 #include <vector>
 #include <tuple>
 #include <memory>
+#include <experimental/optional>
+namespace ex = std::experimental;
+
 #include <opencv2/opencv.hpp>
 
 #include <pcl/point_cloud.h>

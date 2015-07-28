@@ -32,19 +32,21 @@ find_package(Leptonica)
 find_package(JBig2Enc)
 find_package(JBig2Dec)
 find_package(OpenJPEG)
+find_package(PrimitiveDetection)
 
 file (GLOB_RECURSE obj RELATIVE "${PROJECT_SOURCE_DIR}" "src/*.cpp")
-if (OPENCV_CORE_FOUND AND OPENCV_HIGHGUI_FOUND AND LEPTONICA_FOUND AND JBIG2ENC_FOUND AND JBIG2DEC_FOUND AND OPENJPEG_FOUND AND PCL_FOUND)
+if (OPENCV_CORE_FOUND AND OPENCV_HIGHGUI_FOUND AND LEPTONICA_FOUND AND JBIG2ENC_FOUND AND JBIG2DEC_FOUND AND OPENJPEG_FOUND AND PCL_FOUND AND PRIMITIVE_DETECTION_FOUND)
 	include_directories(${OpenCV_INCLUDE_DIRS})
 	include_directories(${LEPTONICA_INCLUDE_DIRS})
 	include_directories(${JBIG2ENC_INCLUDE_DIRS})
 	include_directories(${JBIG2DEC_INCLUDE_DIRS})
 	include_directories(${OPENJPEG_INCLUDE_DIRS})
 	include_directories(${PCL_INCLUDE_DIRS})
+	include_directories(${PRIMITIVE_DETECTION_INCLUDE_DIRS})
 
     find_package(Boost COMPONENTS system filesystem program_options regex)
 	add_library(pcl_compress SHARED ${obj})
-	target_link_libraries(pcl_compress ${OpenCV_LIBS} ${LEPTONICA_LIBRARIES} ${JBIG2ENC_LIBRARIES} ${JBIG2DEC_LIBRARIES} ${OPENJPEG_LIBRARIES} ${PCL_LIBRARIES} "dl")
+	target_link_libraries(pcl_compress ${OpenCV_LIBS} ${LEPTONICA_LIBRARIES} ${JBIG2ENC_LIBRARIES} ${JBIG2DEC_LIBRARIES} ${OPENJPEG_LIBRARIES} ${PCL_LIBRARIES} ${PRIMITIVE_DETECTION_LIBRARIES} "dl")
 
     include_directories(${Boost_INCLUDE_DIRS})
 
@@ -52,27 +54,37 @@ if (OPENCV_CORE_FOUND AND OPENCV_HIGHGUI_FOUND AND LEPTONICA_FOUND AND JBIG2ENC_
     # compress_octree
     add_executable(compress_octree "apps/compress_octree.cpp")
     target_link_libraries(compress_octree ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES})
-    # compress_octree
-    add_executable(decompress_octree "apps/decompress_octree.cpp")
-    target_link_libraries(decompress_octree ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES})
+    # compress_primitives
+    add_executable(compress_primitives "apps/compress_primitives.cpp")
+    target_link_libraries(compress_primitives ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES})
+    # decompress_patches
+    add_executable(decompress_patches "apps/decompress_patches.cpp")
+    target_link_libraries(decompress_patches ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES})
 
-    ## tests
-    include_directories(${PROJECT_SOURCE_DIR}/tests/include)
+    ## unittests
+    file (GLOB TEST_UNITS RELATIVE "${PROJECT_SOURCE_DIR}" "tests/*.cpp")
+    add_executable(unittest ${TEST_UNITS})
+    target_link_libraries(unittest ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES} 'unittest' 'pthread')
+
+    #include_directories(${PROJECT_SOURCE_DIR}/tests/include)
     # jbig2 test
-    add_executable(jbig2_test "tests/jbig2_test.cpp")
-    target_link_libraries(jbig2_test ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES})
+    #add_executable(jbig2_test "tests/jbig2_test.cpp")
+    #target_link_libraries(jbig2_test ${Boost_LIBRARIES} pcl_compress ${JBIG2DEC_LIBRARIES})
     # jpeg2000 test
-    add_executable(jpeg2000_test "tests/jpeg2000_test.cpp")
-    target_link_libraries(jpeg2000_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
+    #add_executable(jpeg2000_test "tests/jpeg2000_test.cpp")
+    #target_link_libraries(jpeg2000_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
     # patch test
-    add_executable(patch_test "tests/patch_test.cpp")
-    target_link_libraries(patch_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
+    #add_executable(patch_test "tests/patch_test.cpp")
+    #target_link_libraries(patch_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
     # serialize_octree_decomp
-    add_executable(serialize_octree_decomp "tests/serialize_octree_decomp.cpp")
-    target_link_libraries(serialize_octree_decomp ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
+    #add_executable(serialize_octree_decomp "tests/serialize_octree_decomp.cpp")
+    #target_link_libraries(serialize_octree_decomp ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
+    # serialize_primitive_decomp
+    #add_executable(serialize_primitive_decomp "tests/serialize_primitive_decomp.cpp")
+    #target_link_libraries(serialize_primitive_decomp ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
     # quadtree_test
-    add_executable(quadtree_test "tests/quadtree_test.cpp")
-    target_link_libraries(quadtree_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
+    #add_executable(quadtree_test "tests/quadtree_test.cpp")
+    #target_link_libraries(quadtree_test ${Boost_LIBRARIES} pcl_compress ${OPENJPEG_LIBRARIES})
 
 	# install binary
     if (WIN32)
@@ -83,7 +95,8 @@ if (OPENCV_CORE_FOUND AND OPENCV_HIGHGUI_FOUND AND LEPTONICA_FOUND AND JBIG2ENC_
         install (TARGETS pcl_compress DESTINATION lib)
     endif()
     install (TARGETS compress_octree DESTINATION bin)
-    install (TARGETS decompress_octree DESTINATION bin)
+    install (TARGETS compress_primitives DESTINATION bin)
+    install (TARGETS decompress_patches DESTINATION bin)
 	# install header
 	install (DIRECTORY include/ DESTINATION include/pcl_compress)
 endif()

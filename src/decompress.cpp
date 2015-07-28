@@ -232,7 +232,7 @@ std::vector<patch_t> decompress_patches(compressed_cloud_t::const_ptr_t cloud) {
         ;
 
         chunk_ptr_t chunk_jbig2(new chunk_t(cloud->patch_image_data[idx*2 + 0]));
-        chunk_ptr_t chunk_jpeg2k(new chunk_t(cloud->patch_image_data[idx*2 + 0]));
+        chunk_ptr_t chunk_jpeg2k(new chunk_t(cloud->patch_image_data[idx*2 + 1]));
 
         patch.occ_map = jbig2_decompress_chunk(chunk_jbig2);
         patch.height_map = jpeg2000_decompress_chunk(chunk_jpeg2k);
