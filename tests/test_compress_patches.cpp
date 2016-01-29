@@ -15,6 +15,7 @@ COLLECTION(compress_patches_test) {
 struct test_context {
     std::vector<patch_t> patches;
     compressed_cloud_t::ptr_t cc;
+    vec3f_t scan_origin;
 };
 
 struct test_compress_patches : ::unittest::testcase<test_context> {
@@ -41,6 +42,7 @@ struct test_compress_patches : ::unittest::testcase<test_context> {
             cloud_in, params, 1024, 6, 0.03f * bbox.diagonal().norm());
 
         auto context = std::make_shared<test_context>();
+        context->scan_origin = cloud_in->sensor_origin_.head(3);
         for (const auto& subset : decomp) {
             patch_t patch = compute_patch(cloud_in, subset, img_size, 0);
             context->patches.push_back(patch);
@@ -52,20 +54,12 @@ struct test_compress_patches : ::unittest::testcase<test_context> {
 
     void test_compressed_write() {
         auto context = get_test_context();
-        context->cc = compress_patches(context->patches, 35);
+        context->cc = compress_patches(context->patches, 35, 0, context->scan_origin);
         compressed_cloud_t::ptr_t cc1 = std::make_shared<compressed_cloud_t>();
         serialize(BINARY, "/tmp/cc_write_dump.bin", *context->cc);
         deserialize(BINARY, "/tmp/cc_write_dump.bin", *cc1);
 
-        assert_equal(context->cc->num_patches, cc1->num_patches);
-        assert_equal(context->cc->num_points, cc1->num_points);
-        assert_equal(context->cc->bbox_origins.min(), cc1->bbox_origins.min());
-        assert_equal(context->cc->bbox_origins.max(), cc1->bbox_origins.max());
-        assert_equal(context->cc->bbox_bboxes.min(), cc1->bbox_bboxes.min());
-        assert_equal(context->cc->bbox_bboxes.max(), cc1->bbox_bboxes.max());
-        assert_equal_containers(context->cc->origins, cc1->origins);
-        assert_equal_containers(context->cc->bboxes, cc1->bboxes);
-        assert_equal_containers(context->cc->bases, cc1->bases);
+        assert_equal_containers(context->cc->global_data, cc1->global_data);
         assert_equal(context->cc->patch_image_data.size(), cc1->patch_image_data.size());
         for (uint32_t i = 0; i < context->cc->patch_image_data.size(); ++i) {
             assert_equal_containers(context->cc->patch_image_data[i], cc1->patch_image_data[i]);
@@ -74,7 +68,14 @@ struct test_compress_patches : ::unittest::testcase<test_context> {
 
     void test_compress_decompress() {
         auto context = get_test_context();
-        std::vector<patch_t> dec = decompress_patches(context->cc);
+        vec3f_t scan_origin;
+        uint16_t scan_index;
+        std::vector<patch_t> dec = decompress_patches(context->cc, scan_index, scan_origin);
+
+        assert_equal(0, scan_index);
+        assert_equal(context->scan_origin[0], scan_origin[0]);
+        assert_equal(context->scan_origin[1], scan_origin[1]);
+        assert_equal(context->scan_origin[2], scan_origin[2]);
 
         std::vector<patch_t>& org = context->patches;
         assert_equal(org.size(), dec.size());

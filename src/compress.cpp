@@ -1,200 +1,17 @@
 #include <compress.hpp>
+#include <utils.hpp>
 
 #include <sstream>
 #include <algorithm>
 #include <limits>
 
-#include <leptonica/alltypes.h>
-#include <leptonica/allheaders.h>
-#include <jbig2enc/jbig2enc.h>
-
-#include <openjpeg-2.1/openjpeg.h>
-
 #include <pcl/common/centroid.h>
 
+#include <jbig2.hpp>
+#include <jpeg2000.hpp>
+#include <zlib.hpp>
+
 namespace pcl_compress {
-
-std::vector<PIX*>
-convert_to_pages(const std::vector<image_t>& images) {
-    std::vector<PIX*> pages;
-    for (const auto& img : images) {
-        cv::Size s = img.size();
-        PIX* pix = pixCreate(s.width, s.height, 1);
-        pix->xres = 1;
-        pix->yres = 1;
-
-        int wpl = pixGetWpl(pix);
-        uint32_t* data = pixGetData(pix);
-        for (int row = 0; row < s.height; ++row) {
-            uint32_t* row_pix = data + row * wpl;
-            const uint8_t* row_img = img.ptr(row);
-            for (int col = 0; col < s.width; ++col) {
-                if (row_img[col] > 188) {
-                    CLEAR_DATA_BIT(row_pix, col);
-                } else {
-                    SET_DATA_BIT(row_pix, col);
-                }
-            }
-        }
-
-        pages.push_back(pix);
-    }
-
-    return pages;
-}
-
-chunks_t
-jbig2_compress_images(const std::vector<image_t>& images) {
-    std::vector<PIX*> pages = convert_to_pages(images);
-
-    jbig2ctx* ctx = jbig2_init(0.85f, 0.5f, 0, 0, true, -1);
-
-    chunks_t chunks;
-    for (auto& page : pages) {
-        int length;
-        uint8_t* data;
-        data = jbig2_encode_generic(page, true, 0, 0, false, &length);
-        chunk_ptr_t chunk(new chunk_t(data, data + length));
-        pixDestroy(&page);
-        free(data);
-        chunks.push_back(chunk);
-    }
-
-    jbig2_destroy(ctx);
-
-    return chunks;
-}
-
-opj_image_t*
-convert_for_jpeg2000(const image_t& img) {
-    opj_image_cmptparm_t cmptparm[4];
-    int numcomps = 1;
-    memset(&cmptparm[0], 0, (size_t)numcomps * sizeof(opj_image_cmptparm_t));
-    OPJ_COLOR_SPACE color_space = OPJ_CLRSPC_GRAY;  // OPJ_CLRSPC_SRGB;
-    cv::Size size = img.size();
-    int w = size.width;
-    int h = size.height;
-    for (int i = 0; i < numcomps; i++) {
-        cmptparm[i].prec = (OPJ_UINT32)8;
-        cmptparm[i].bpp = (OPJ_UINT32)8;
-        cmptparm[i].sgnd = 0;
-        cmptparm[i].dx = (OPJ_UINT32)1;
-        cmptparm[i].dy = (OPJ_UINT32)1;
-        cmptparm[i].w = (OPJ_UINT32)w;
-        cmptparm[i].h = (OPJ_UINT32)h;
-    }
-
-    opj_image_t* image =
-        opj_image_create((OPJ_UINT32)numcomps, &cmptparm[0], color_space);
-    image->x0 = 0;
-    image->y0 = 0;
-    image->x1 = size.width;
-    image->y1 = size.height;
-    for (int row = 0; row < h; ++row) {
-        const uint8_t* row_img = img.ptr(row);
-        for (int col = 0; col < w; ++col) {
-            for (int i = 0; i < numcomps; ++i) {
-                image->comps[i].data[row * w + col] = (OPJ_INT32)row_img[col];
-            }
-        }
-    }
-
-    return image;
-}
-
-chunks_t
-jpeg2000_compress_images(const std::vector<image_t>& images, int quality) {
-    opj_cparameters_t parameters;
-    opj_set_default_encoder_parameters(&parameters);
-    parameters.tcp_distoratio[0] = quality;
-    parameters.tcp_numlayers = 1;
-    parameters.cp_fixed_quality = 1;
-    parameters.numresolution = 2;
-
-    opj_codec_t* codec = 0;
-    opj_stream_t* stream = 0;
-
-    chunks_t chunks;
-    opj_image_t* image = NULL;
-    for (const auto& src_img : images) {
-        image = convert_for_jpeg2000(src_img);
-        parameters.tcp_mct = (image->numcomps >= 3) ? 1 : 0;
-
-        codec = opj_create_compress(OPJ_CODEC_J2K);
-
-        // opj_set_info_handler(codec, info_callback,00);
-        // opj_set_warning_handler(codec, warning_callback,00);
-        // opj_set_error_handler(codec, error_callback,00);
-
-        if (!opj_setup_encoder(codec, &parameters, image)) {
-            opj_destroy_codec(codec);
-            opj_image_destroy(image);
-            throw std::runtime_error("Failed to encode image");
-        }
-
-        stream = opj_stream_default_create(0);
-        if (!stream) {
-            throw std::runtime_error("Unable to create stream");
-        }
-
-        // set up stream
-        std::stringstream data_stream;
-        opj_stream_set_user_data(stream, (void*)&data_stream, [](void*) {});
-        opj_stream_set_user_data_length(stream,
-                                        (OPJ_UINT64)sizeof(data_stream));
-        opj_stream_set_write_function(
-            stream, [](void* buf, OPJ_SIZE_T len, void* data) {
-                std::stringstream* str = (std::stringstream*)data;
-                str->write((const char*)buf, len);
-                return len;
-            });
-        opj_stream_set_seek_function(stream, [](OPJ_OFF_T offset, void* data) {
-            std::stringstream* str = (std::stringstream*)data;
-            str->seekp(offset);
-            return 1;
-        });
-
-        bool success = opj_start_compress(codec, image, stream);
-        if (!success) {
-            std::cerr << "start compress failed"
-                      << "\n";
-        }
-        success = success && opj_encode(codec, stream);
-        if (!success) {
-            std::cerr << "encode failed"
-                      << "\n";
-        }
-        success = success && opj_end_compress(codec, stream);
-        if (!success) {
-            std::cerr << "end compress failed"
-                      << "\n";
-        }
-        if (!success) {
-            opj_stream_destroy(stream);
-            opj_destroy_codec(codec);
-            opj_image_destroy(image);
-            throw std::runtime_error("Failed to encode image");
-        }
-
-        // work on data...
-        data_stream.seekg(0, data_stream.end);
-        int length = data_stream.tellg();
-        data_stream.seekg(0, data_stream.beg);
-        assert(length > 0);
-        uint8_t* data = new uint8_t[length];
-        data_stream.read((char*)data, length);
-
-        chunk_ptr_t chunk(new chunk_t(data, data + length));
-
-        opj_stream_destroy(stream);
-        opj_destroy_codec(codec);
-        opj_image_destroy(image);
-
-        chunks.push_back(chunk);
-    }
-
-    return chunks;
-}
 
 template <typename PointT>
 base_t
@@ -216,7 +33,10 @@ compute_base_(typename pcl::PointCloud<PointT>::ConstPtr cloud,
     Eigen::JacobiSVD<Eigen::MatrixXf> svd(
         pos_mat, Eigen::ComputeThinU | Eigen::ComputeThinV);
     base_t base = svd.matrixV().block<3, 3>(0, 0);
-    base.col(1) = (1.f - fabs(base(2,2))) < Eigen::NumTraits<float>::dummy_precision() ? vec3f_t::UnitX() : vec3f_t::UnitZ();
+    base.col(1) =
+        (1.f - fabs(base(2, 2))) < Eigen::NumTraits<float>::dummy_precision()
+            ? vec3f_t::UnitX()
+            : vec3f_t::UnitZ();
     base.col(0) = base.col(1).cross(base.col(2)).normalized();
     base.col(1) = base.col(2).cross(base.col(0)).normalized();
     return base;
@@ -243,70 +63,6 @@ project_and_normalize_(typename pcl::PointCloud<PointT>::ConstPtr cloud,
 }
 
 patch_t
-compute_patch(cloud_xyz_t::ConstPtr cloud, const std::vector<int>& subset,
-              float px_factor, float px_epsilon, const vec2i_t& min_img_size) {
-    patch_t patch;
-
-    // compute local base
-    patch.base = compute_base_<point_xyz_t>(cloud, subset, patch.origin);
-
-    // project into local base and compute local bounding box
-    std::vector<vec3f_t> local_coords;
-    project_and_normalize_<point_xyz_t>(cloud, subset, patch, local_coords);
-
-    // compute local resolution
-    vec2f_t res =
-        (local_coords[1].head(2) - local_coords[0].head(2)).cwiseAbs();
-    vec2f_t eps = vec2f_t(px_epsilon, px_epsilon);
-    for (uint32_t i = 0; i < local_coords.size(); ++i) {
-        vec3f_t p_i = local_coords[i];
-        for (uint32_t j = i + 1; j < local_coords.size(); ++j) {
-            res = eps.cwiseMax(
-                res.cwiseMin((local_coords[j] - p_i).head(2).cwiseAbs()));
-        }
-    }
-
-    // compute image extents
-    // size = ceil(1 / (factor * res))
-    // factor == f  ==>  maximum of f^2 points per pixel on average
-    vec2i_t img_size = vec2f_t::Ones()
-                           .cwiseQuotient(res * px_factor)
-                           .unaryExpr([](float x) { return std::ceil(x); })
-                           .template cast<int>();
-    img_size = img_size.cwiseMax(min_img_size);
-    // std::cout << img_size.transpose() << "\n";
-    patch.height_map =
-        image_t(img_size[1], img_size[0], CV_8UC1, cv::Scalar(0));
-    patch.occ_map = image_t(img_size[1], img_size[0], CV_8UC1, cv::Scalar(0));
-    vec2f_t img_size_float = img_size.template cast<float>();
-    patch.num_points = 0;
-    for (const auto& p : local_coords) {
-        vec2i_t uv = p.head(2)
-                         .cwiseProduct(img_size_float)
-                         .unaryExpr([](float x) { return std::floor(x); })
-                         .template cast<int>();
-        uv[0] = std::min(uv[0], img_size[0] - 1);
-        uv[1] = std::min(uv[1], img_size[1] - 1);
-
-        patch.height_map.at<uint8_t>(uv[1], uv[0]) =
-            static_cast<uint8_t>(p[2] * 255.f);
-        if (patch.occ_map.at<uint8_t>(uv[1], uv[0]) == 0) {
-            patch.num_points += 1;
-        }
-        patch.occ_map.at<uint8_t>(uv[1], uv[0]) = uint8_t(255);
-    }
-
-    // blur height_map where there is no occupancy
-    image_t blurred(img_size[1], img_size[0], CV_8UC1, 0),
-        mask(img_size[1], img_size[0], CV_8UC1);
-    cv::subtract(cv::Scalar::all(255), patch.occ_map, mask);
-    cv::GaussianBlur(patch.height_map, blurred, cv::Size(9, 9), 0);
-    blurred.copyTo(patch.height_map, mask);
-
-    return patch;
-}
-
-patch_t
 compute_patch(cloud_normal_t::ConstPtr cloud, const std::vector<int>& subset,
               const vec2i_t& img_size, uint32_t blur_iters) {
     patch_t patch;
@@ -318,12 +74,12 @@ compute_patch(cloud_normal_t::ConstPtr cloud, const std::vector<int>& subset,
     std::vector<vec3f_t> local_coords;
     project_and_normalize_<point_normal_t>(cloud, subset, patch, local_coords);
 
-    // std::cout << img_size.transpose() << "\n";
     patch.height_map =
-        image_t(img_size[1], img_size[0], CV_8UC1, cv::Scalar(0));
+        image_t(img_size[1], img_size[0], CV_8UC3, cv::Scalar(0));
     patch.occ_map = image_t(img_size[1], img_size[0], CV_8UC1, cv::Scalar(0));
     vec2f_t img_size_float = img_size.template cast<float>();
     patch.num_points = 0;
+    uint32_t idx = 0;
     for (const auto& p : local_coords) {
         vec2i_t uv = p.head(2)
                          .cwiseProduct(img_size_float)
@@ -331,9 +87,17 @@ compute_patch(cloud_normal_t::ConstPtr cloud, const std::vector<int>& subset,
                          .template cast<int>();
         uv[0] = std::min(uv[0], img_size[0] - 1);
         uv[1] = std::min(uv[1], img_size[1] - 1);
+        uv[0] = std::max(uv[0], 0);
+        uv[1] = std::max(uv[1], 0);
+        vec3f_t normal = cloud->points[subset[idx++]].getNormalVector3fMap();
+        normal.normalize();
+        vec2f_t nrm_sph = to_normalized_spherical(normal);
 
-        patch.height_map.at<uint8_t>(uv[1], uv[0]) =
-            static_cast<uint8_t>(p[2] * 255.f);
+        patch.height_map.at<cv::Vec3b>(uv[1], uv[0]) =
+            cv::Vec3b(static_cast<uint8_t>(p[2] * 255.f),
+                      static_cast<uint8_t>(nrm_sph[0] * 255.f),
+                      static_cast<uint8_t>(nrm_sph[1] * 255.f));
+
         if (patch.occ_map.at<uint8_t>(uv[1], uv[0]) == 0) {
             patch.num_points += 1;
         }
@@ -342,8 +106,8 @@ compute_patch(cloud_normal_t::ConstPtr cloud, const std::vector<int>& subset,
 
     // blur height_map where there is no occupancy
     if (blur_iters) {
-        image_t blurred(img_size[1], img_size[0], CV_8UC1, 0),
-            mask(img_size[1], img_size[0], CV_8UC1);
+        image_t blurred(img_size[1], img_size[0], CV_8UC3, cv::Scalar(0, 0, 0));
+        image_t mask(img_size[1], img_size[0], CV_8UC1);
         cv::subtract(cv::Scalar::all(255), patch.occ_map, mask);
         for (uint32_t i = 0; i < blur_iters; ++i) {
             cv::GaussianBlur(patch.height_map, blurred, cv::Size(5, 5), 0);
@@ -364,74 +128,94 @@ discretize(float value, float min_value, float max_value) {
     return static_cast<IntegerType>(normalized * static_cast<float>(max_rep));
 }
 
+template <typename T>
+void write(std::ostream& out, const T& v) {
+    out.write((const char*)&v, sizeof(T));
+}
+
+template <>
+void write<vec3f_t>(std::ostream& out, const vec3f_t& v) {
+    out.write((const char*)&v[0], sizeof(float));
+    out.write((const char*)&v[1], sizeof(float));
+    out.write((const char*)&v[2], sizeof(float));
+}
+
+template <typename IntegerType>
+void dwrite(std::ostream& out, const float& v, float min_value, float max_value) {
+    IntegerType tmp = discretize<IntegerType>(v, min_value, max_value);
+    out.write((const char*)&tmp, sizeof(IntegerType));
+}
+
+template <typename IntegerType>
+void dwrite(std::ostream& out, const vec3f_t& v, const bbox3f_t& bbox) {
+    IntegerType tmp;
+    tmp = discretize<IntegerType>(v[0], bbox.min()[0], bbox.max()[0]);
+    out.write((const char*)&tmp, sizeof(IntegerType));
+    tmp = discretize<IntegerType>(v[1], bbox.min()[1], bbox.max()[1]);
+    out.write((const char*)&tmp, sizeof(IntegerType));
+    tmp = discretize<IntegerType>(v[2], bbox.min()[2], bbox.max()[2]);
+    out.write((const char*)&tmp, sizeof(IntegerType));
+}
+
+template <typename IntegerType>
+void dwrite(std::ostream& out, const base_t& v, float min_value, float max_value) {
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            dwrite<IntegerType>(out, v(i,j), min_value, max_value);
+        }
+    }
+}
+
+
 compressed_cloud_t::ptr_t
-compress_patches(const std::vector<patch_t>& patches, int quality) {
+compress_patches(const std::vector<patch_t>& patches, int quality,
+                 uint16_t scan_index, const vec3f_t& scan_origin) {
     compressed_cloud_t::ptr_t cloud(new compressed_cloud_t());
 
-    cloud->num_patches = patches.size();
-    cloud->num_points = 0;
+    std::stringstream gdata;
+    write(gdata, scan_origin);
+    write(gdata, scan_index);
+    uint32_t num_patches = patches.size();
+    write(gdata, num_patches);
+
+    //uint32_t num_points = 0;
+    bbox3f_t bbox_origins, bbox_bboxes;
     for (const auto& patch : patches) {
-        cloud->num_points += patch.num_points;
-        cloud->bbox_origins.extend(patch.origin);
-        cloud->bbox_bboxes.extend(patch.local_bbox.min());
-        cloud->bbox_bboxes.extend(patch.local_bbox.max());
+        //num_points += patch.num_points;
+        bbox_origins.extend(patch.origin);
+        bbox_bboxes.extend(patch.local_bbox.min());
+        bbox_bboxes.extend(patch.local_bbox.max());
     }
-    cloud->origins.resize(3 * patches.size());
-    cloud->bboxes.resize(6 * patches.size());
-    cloud->bases.resize(9 * patches.size());
-    uint32_t idx = 0;
-    vec3f_t bbmin_o = cloud->bbox_origins.min();
-    vec3f_t bbmax_o = cloud->bbox_origins.max();
-    vec3f_t bbmin_b = cloud->bbox_bboxes.min();
-    vec3f_t bbmax_b = cloud->bbox_bboxes.max();
+    //write(gdata, num_points);
+    write(gdata, bbox_origins.min());
+    write(gdata, bbox_origins.max());
+    write(gdata, bbox_bboxes.min());
+    write(gdata, bbox_bboxes.max());
+
     std::vector<image_t> height_maps, occ_maps;
     for (const auto& patch : patches) {
-        cloud->origins[idx * 3 + 0] =
-            discretize<uint16_t>(patch.origin[0], bbmin_o[0], bbmax_o[0]);
-        cloud->origins[idx * 3 + 1] =
-            discretize<uint16_t>(patch.origin[1], bbmin_o[1], bbmax_o[1]);
-        cloud->origins[idx * 3 + 2] =
-            discretize<uint16_t>(patch.origin[2], bbmin_o[2], bbmax_o[2]);
-        cloud->bboxes[idx * 6 + 0] = discretize<uint16_t>(
-            patch.local_bbox.min()[0], bbmin_b[0], bbmax_b[0]);
-        cloud->bboxes[idx * 6 + 1] = discretize<uint16_t>(
-            patch.local_bbox.min()[1], bbmin_b[1], bbmax_b[1]);
-        cloud->bboxes[idx * 6 + 2] = discretize<uint16_t>(
-            patch.local_bbox.min()[2], bbmin_b[2], bbmax_b[2]);
-        cloud->bboxes[idx * 6 + 3] = discretize<uint16_t>(
-            patch.local_bbox.max()[0], bbmin_b[0], bbmax_b[0]);
-        cloud->bboxes[idx * 6 + 4] = discretize<uint16_t>(
-            patch.local_bbox.max()[1], bbmin_b[1], bbmax_b[1]);
-        cloud->bboxes[idx * 6 + 5] = discretize<uint16_t>(
-            patch.local_bbox.max()[2], bbmin_b[2], bbmax_b[2]);
-        cloud->bases[idx * 9 + 0] =
-            discretize<uint8_t>(patch.base(0, 0), -1.f, 1.f);
-        cloud->bases[idx * 9 + 1] =
-            discretize<uint8_t>(patch.base(0, 1), -1.f, 1.f);
-        cloud->bases[idx * 9 + 2] =
-            discretize<uint8_t>(patch.base(0, 2), -1.f, 1.f);
-        cloud->bases[idx * 9 + 3] =
-            discretize<uint8_t>(patch.base(1, 0), -1.f, 1.f);
-        cloud->bases[idx * 9 + 4] =
-            discretize<uint8_t>(patch.base(1, 1), -1.f, 1.f);
-        cloud->bases[idx * 9 + 5] =
-            discretize<uint8_t>(patch.base(1, 2), -1.f, 1.f);
-        cloud->bases[idx * 9 + 6] =
-            discretize<uint8_t>(patch.base(2, 0), -1.f, 1.f);
-        cloud->bases[idx * 9 + 7] =
-            discretize<uint8_t>(patch.base(2, 1), -1.f, 1.f);
-        cloud->bases[idx * 9 + 8] =
-            discretize<uint8_t>(patch.base(2, 2), -1.f, 1.f);
+        write(gdata, patch.num_points);
+        dwrite<uint16_t>(gdata, patch.origin, bbox_origins);
+        dwrite<uint16_t>(gdata, patch.local_bbox.min(), bbox_bboxes);
+        dwrite<uint16_t>(gdata, patch.local_bbox.max(), bbox_bboxes);
+        dwrite<uint8_t>(gdata, patch.base, -1.f, 1.f);
+
         height_maps.push_back(patch.height_map);
         occ_maps.push_back(patch.occ_map);
-        //std::string outname = "/tmp/out/height_" + std::to_string(idx) + ".png";
-        //cv::imwrite(outname.c_str(), patch.height_map);
-        ++idx;
     }
+
+    //uint32_t length_global = gdata.tellp();
+    gdata.seekg(0);
+    std::stringstream gcompr;
+    zlib_compress_stream(gdata, gcompr);
+    auto compr_length = gcompr.tellp();
+    cloud->global_data.resize(compr_length);
+    gcompr.seekg(0);
+    gcompr.read((char*)cloud->global_data.data(), compr_length);
+
 
     chunks_t jbig2_chunks = jbig2_compress_images(occ_maps);
     chunks_t jpeg2k_chunks = jpeg2000_compress_images(height_maps, quality);
-    // cloud->global_occ_data = jbig2_stream.global;
     assert(jbig2_chunks.size() == jpeg2k_chunks.size());
 
     for (uint32_t i = 0; i < jpeg2k_chunks.size(); ++i) {

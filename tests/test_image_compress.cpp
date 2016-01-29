@@ -7,6 +7,8 @@ namespace fs = boost::filesystem;
 #include <compress.hpp>
 #include <decompress.hpp>
 #include <decomposition.hpp>
+#include <jbig2.hpp>
+#include <jpeg2000.hpp>
 using namespace pcl_compress;
 
 #include <libunittest/all.hpp>
@@ -16,7 +18,8 @@ COLLECTION(image_compress) {
 
 
 struct test_context {
-    std::vector<image_t> images;
+    std::vector<image_t> rgb;
+    std::vector<image_t> binary;
 };
 
 struct image_compress : ::unittest::testcase<test_context> {
@@ -33,10 +36,17 @@ struct image_compress : ::unittest::testcase<test_context> {
         }
 
         auto context = std::make_shared<test_context>();
-        context->images.resize(image_files.size());
+        context->rgb.resize(image_files.size());
+        context->binary.resize(image_files.size());
         for (uint32_t i = 0; i < image_files.size(); ++i) {
             fs::path p = image_files[i];
-            image_t img = cv::imread(p.string(), CV_LOAD_IMAGE_GRAYSCALE);
+
+            // rgb
+            image_t img = cv::imread(p.string(), CV_LOAD_IMAGE_COLOR);
+            context->rgb[i] = img;
+
+            // binary
+            img = cv::imread(p.string(), CV_LOAD_IMAGE_GRAYSCALE);
             auto s = img.size();
             for (uint32_t row = 0; row < static_cast<uint32_t>(s.height); ++row) {
                 uint8_t* row_ptr = img.ptr(row);
@@ -44,7 +54,7 @@ struct image_compress : ::unittest::testcase<test_context> {
                     row_ptr[col] = row_ptr[col] > 188 ? 255 : 0;
                 }
             }
-            context->images[i] = img;
+            context->binary[i] = img;
         }
 
         UNITTEST_RUNCTX(context, test_jbig2_compress)
@@ -66,8 +76,9 @@ struct image_compress : ::unittest::testcase<test_context> {
 
             auto s_a = a.size();
             auto s_b = a.size();
-            if (s_a.width != s_b.width || s_a.height != s_b.height) {
-                throw std::runtime_error("Incompatible images sizes in RMSE computation for image index " + std::to_string(i));
+            int c_a = a.channels(), c_b = b.channels();
+            if (s_a.width != s_b.width || s_a.height != s_b.height || c_a != c_b) {
+                throw std::runtime_error("Incompatible images sizes or channels in RMSE computation for image index " + std::to_string(i));
             }
 
             double img_error = 0.0;
@@ -75,13 +86,15 @@ struct image_compress : ::unittest::testcase<test_context> {
                 const uint8_t* row_a = a.ptr(row);
                 const uint8_t* row_b = b.ptr(row);
                 for (int col = 0; col < s_a.width; ++col) {
-                    uint8_t val_a = row_a[col];
-                    uint8_t val_b = row_b[col];
-                    double diff = fabs(static_cast<double>(val_a) - static_cast<double>(val_b));
-                    img_error += diff;
+                    for (int c = 0; c < c_a; ++c) {
+                        uint8_t val_a = row_a[col * c_a + c];
+                        uint8_t val_b = row_b[col * c_a + c];
+                        double diff = fabs(static_cast<double>(val_a) - static_cast<double>(val_b));
+                        img_error += diff;
+                    }
                 }
             }
-            rmse += img_error / static_cast<double>(s_a.height * s_a.width);
+            rmse += img_error / static_cast<double>(s_a.height * s_a.width * c_a);
         }
 
         return rmse / static_cast<double>(images_0.size());
@@ -89,30 +102,30 @@ struct image_compress : ::unittest::testcase<test_context> {
 
     void test_jbig2_compress() {
         auto context = get_test_context();
-        uint32_t num_images = context->images.size();
-        chunks_t chunks = jbig2_compress_images(context->images);
+        uint32_t num_images = context->binary.size();
+        chunks_t chunks = jbig2_compress_images(context->binary);
         assert_equal(num_images, chunks.size());
 
         std::vector<image_t> reconstructed;
         for (uint32_t i = 0; i < num_images; ++i) {
             reconstructed.push_back(jbig2_decompress_chunk(chunks[i]));
         }
-        double rmse = compute_rmse(context->images, reconstructed);
+        double rmse = compute_rmse(context->binary, reconstructed);
         assert_equal(0.0, rmse);
     }
 
     void test_jpeg2000_compress() {
         auto context = get_test_context();
-        uint32_t num_images = context->images.size();
-        chunks_t chunks = jpeg2000_compress_images(context->images, 35);
+        uint32_t num_images = context->rgb.size();
+        chunks_t chunks = jpeg2000_compress_images(context->rgb, 35);
         assert_equal(num_images, chunks.size());
 
         std::vector<image_t> reconstructed;
         for (uint32_t i = 0; i < num_images; ++i) {
             reconstructed.push_back(jpeg2000_decompress_chunk(chunks[i]));
         }
-        double rmse = compute_rmse(context->images, reconstructed);
-        assert_lesser(rmse, 0.8);
+        double rmse = compute_rmse(context->rgb, reconstructed);
+        assert_lesser(rmse, 0.9);
     }
 };
 

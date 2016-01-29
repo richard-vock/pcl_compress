@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <vector>
 #include <cstdio>
@@ -14,23 +15,23 @@ namespace po = boost::program_options;
 #include <decompress.hpp>
 #include <decomposition.hpp>
 
-#include <pcl/io/pcd_io.h>
+#include <e57_pcl/read.hpp>
 
 using namespace pcl_compress;
 
 int
 main(int argc, char const* argv[]) {
     std::string file_in;
-    std::string file_out;
+    std::string folder_out;
     vec2i_t img_size;
     uint32_t blur_iters;
     int32_t max_points;
     uint32_t quality;
 
     po::options_description desc("jpeg2000_test command line options");
-    desc.add_options()("help,h", "Help message")(
-        "input-file,i", po::value<std::string>(&file_in)->required(), "Input file")
-        ("output-file,o", po::value<std::string>(&file_out)->required(), "Output file")
+    desc.add_options()("help,h", "Help message")
+        ("input-file,i", po::value<std::string>(&file_in)->required(), "Input file")
+        ("output-folder,o", po::value<std::string>(&folder_out)->required(), "Output folder")
         ("img-size,s", po::value<int>(&img_size[0])->default_value(32), "Image width and height")
         ("blur-iterations,b", po::value<uint32_t>(&blur_iters)->default_value(8), "Number of blur iterations")
         ("max-points-per-cell,m", po::value<int32_t>(&max_points)->default_value(-1), "Point count threshold for subdividing quadtree cells (Default: -1 => Use img-size * img-size).")
@@ -59,7 +60,7 @@ main(int argc, char const* argv[]) {
     if (max_points < 0) max_points = img_size[0] * img_size[1];
 
     fs::path path_in(file_in);
-    fs::path path_out(file_out);
+    fs::path path_out(folder_out);
 
     if (!fs::exists(file_in)) {
         std::cerr << "Input file does not exist"
@@ -67,50 +68,50 @@ main(int argc, char const* argv[]) {
         return 1;
     }
 
-    cloud_normal_t::Ptr cloud_in(new cloud_normal_t());
-    pcl::io::loadPCDFile(path_in.string(), *cloud_in);
-
-    bbox3f_t bbox;
-    for (const auto& p : cloud_in->points) {
-        bbox.extend(p.getVector3fMap());
+    if (!fs::exists(folder_out)) {
+        fs::create_directories(folder_out);
     }
+
     prim_detect_params_t params = {
-        10000,    // min_points
+        20000,    // min_points
         0.05f,  // angle_threshold
-        0.1f,  // epsilon
-        0.5f,   // bitmap_epsilon
+        0.05f,  // epsilon
+        0.1f,   // bitmap_epsilon
         0.f,    // min_area
         0.001f  // probability_threshold
     };
-    decomposition_t decomp = primitive_decomposition<point_normal_t>(
-        cloud_in, params, max_points, 6, 0.03f * bbox.diagonal().norm());
 
-    std::vector<patch_t> patches;
-    for (const auto& subset : decomp) {
-        patch_t patch = compute_patch(cloud_in, subset, img_size, blur_iters);
-        patches.push_back(patch);
+    uint32_t scan_count = e57_pcl::get_scan_count(path_in.string());
+    //Eigen::Vector3d first_scan_origin = e57_pcl::get_first_scan_origin(path_in.string());
+    for (uint32_t scan_idx = 0; scan_idx < scan_count; ++scan_idx) {
+        std::string guid;
+
+        std::cout << "processing scan " << scan_idx << "..." << "\n";
+        cloud_normal_t::Ptr cloud_in = e57_pcl::load_e57_scans_with_normals(
+            path_in.string(), guid, true, nullptr, {scan_idx})[0];
+
+        bbox3f_t bbox;
+        for (const auto& p : cloud_in->points) {
+            bbox.extend(p.getVector3fMap());
+        }
+
+        std::cout << "\tcomputing patches..." << "\n";
+        decomposition_t decomp = primitive_decomposition<point_normal_t>(
+            cloud_in, params, max_points, 6, 0.2f/*0.03f * bbox.diagonal().norm()*/);
+
+        std::vector<patch_t> patches;
+        for (const auto& subset : decomp) {
+            patch_t patch =
+                compute_patch(cloud_in, subset, img_size, blur_iters);
+            patches.push_back(patch);
+        }
+
+        std::cout << "\tcompressing..." << "\n";
+        vec3f_t scan_origin = cloud_in->sensor_origin_.head(3);
+        compressed_cloud_t::ptr_t cc = compress_patches(patches, quality, scan_idx, scan_origin);
+
+        std::stringstream out_name;
+        out_name << (path_out / fs::basename(file_in)).string() << "_" << std::setfill('0') << std::setw(static_cast<int>(std::floor(std::log10(scan_count-1)))+1) << scan_idx << ".e57c";
+        serialize(BINARY, out_name.str(), *cc);
     }
-
-    std::cout << "compressing"
-              << "\n";
-    vec3f_t scan_origin = cloud_in->sensor_origin_.head(3);
-    compressed_cloud_t::ptr_t cc = compress_patches(patches, quality, 0, scan_origin);
-    //uint32_t chars = 4 * 4 + 2 * cc->origins.size() + 2 * cc->bboxes.size() +
-                     //cc->bases.size();
-    //for (const auto& chunk : cc->patch_image_data) {
-        //chars += chunk.size();
-    //}
-
-    //uint64_t bytes_in = static_cast<uint64_t>(cloud_in->size() * 24);
-    //uint64_t bytes_out = static_cast<uint64_t>(chars);
-    //uint64_t c_factor = bytes_in / bytes_out;
-    //double bpp = static_cast<double>(bytes_out) /
-                 //(static_cast<double>(cloud_in->size()) / 8.0);
-    //std::cout << "compression factor: " << c_factor << "\n";
-    //std::cout << "bpp: " << bpp << "\n";
-
-    serialize(BINARY, file_out, *cc);
-
-    //compressed_cloud_t::ptr_t cc_test(new compressed_cloud_t());
-    //deserialize(BINARY, file_out, *cc_test)
 }

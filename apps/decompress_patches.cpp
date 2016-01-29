@@ -59,11 +59,10 @@ int main (int argc, char const* argv[]) {
     compressed_cloud_t::ptr_t cc(new compressed_cloud_t());
     deserialize(BINARY, file_in, *cc);
 
-    std::cout << "decompressing" << "\n";
-    std::vector<patch_t> dec_patches = decompress_patches(cc);
-    std::cout << "done" << "\n";
+    uint16_t scan_index;
+    vec3f_t scan_origin;
+    std::vector<patch_t> dec_patches = decompress_patches(cc, scan_index, scan_origin);
 
-    cloud_xyz_t::Ptr cloud_out = from_patches(dec_patches);
-    std::cout << "Reconstructed cloud with " << cloud_out->size() << " points." << "\n";
+    cloud_normal_t::Ptr cloud_out = from_patches(dec_patches);
     pcl::io::savePCDFileBinary(path_out.string(), *cloud_out);
 }
